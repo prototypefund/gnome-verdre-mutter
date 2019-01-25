@@ -620,7 +620,7 @@ gesture_tracker_state_changed (MetaGestureTracker   *tracker,
                           clutter_x11_event_sequence_get_touch_detail (sequence),
                           DefaultRootWindow (display->x11_display->xdisplay), event_mode);
 
-      if (state == META_SEQUENCE_ACCEPTED)
+      if (accepted)
         meta_display_cancel_touch (display);
     }
 }
