@@ -586,6 +586,8 @@ should_have_hw_cursor (MetaCursorRenderer *renderer,
   if (!cursor_sprite)
     return FALSE;
 
+  return FALSE;
+
   if (meta_cursor_renderer_is_hw_cursors_inhibited (renderer,
                                                     cursor_sprite))
     return FALSE;
