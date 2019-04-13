@@ -132,8 +132,6 @@ struct _MetaBackendPrivate
 
   gboolean is_pointer_position_initialized;
 
-  guint device_update_idle_id;
-
   GHashTable *device_monitors;
 
   int current_device_id;
@@ -185,9 +183,6 @@ meta_backend_finalize (GObject *object)
   g_clear_object (&priv->cancellable);
   g_clear_object (&priv->system_bus);
   g_clear_object (&priv->upower_proxy);
-
-  if (priv->device_update_idle_id)
-    g_source_remove (priv->device_update_idle_id);
 
   g_hash_table_destroy (priv->device_monitors);
 
@@ -1097,20 +1092,28 @@ meta_backend_thaw_updates (MetaBackend *backend)
   clutter_stage_thaw_updates (stage);
 }
 
-static gboolean
-update_last_device (MetaBackend *backend)
+void
+meta_backend_update_last_device (MetaBackend *backend,
+                                 int          device_id)
 {
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
-  MetaCursorTracker *cursor_tracker = priv->cursor_tracker;
-  ClutterInputDeviceType device_type;
   ClutterDeviceManager *manager;
   ClutterInputDevice *device;
+  MetaCursorTracker *cursor_tracker = priv->cursor_tracker;
+  ClutterInputDeviceType device_type;
 
-  priv->device_update_idle_id = 0;
+  if (priv->current_device_id == device_id)
+    return;
+
   manager = clutter_device_manager_get_default ();
-  device = clutter_device_manager_get_device (manager,
-                                              priv->current_device_id);
+  device = clutter_device_manager_get_device (manager, device_id);
+
+  if (!device ||
+      clutter_input_device_get_device_mode (device) == CLUTTER_INPUT_MODE_MASTER)
+    return;
+
   device_type = clutter_input_device_get_device_type (device);
+  priv->current_device_id = device_id;
 
   g_signal_emit (backend, signals[LAST_DEVICE_CHANGED], 0,
                  priv->current_device_id);
@@ -1125,37 +1128,6 @@ update_last_device (MetaBackend *backend)
     default:
       meta_cursor_tracker_set_pointer_visible (cursor_tracker, TRUE);
       break;
-    }
-
-  return G_SOURCE_REMOVE;
-}
-
-void
-meta_backend_update_last_device (MetaBackend *backend,
-                                 int          device_id)
-{
-  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
-  ClutterDeviceManager *manager;
-  ClutterInputDevice *device;
-
-  if (priv->current_device_id == device_id)
-    return;
-
-  manager = clutter_device_manager_get_default ();
-  device = clutter_device_manager_get_device (manager, device_id);
-
-  if (!device ||
-      clutter_input_device_get_device_mode (device) == CLUTTER_INPUT_MODE_MASTER)
-    return;
-
-  priv->current_device_id = device_id;
-
-  if (priv->device_update_idle_id == 0)
-    {
-      priv->device_update_idle_id =
-        g_idle_add ((GSourceFunc) update_last_device, backend);
-      g_source_set_name_by_id (priv->device_update_idle_id,
-                               "[mutter] update_last_device");
     }
 }
 
