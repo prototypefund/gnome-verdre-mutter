@@ -1092,6 +1092,27 @@ meta_backend_thaw_updates (MetaBackend *backend)
   clutter_stage_thaw_updates (stage);
 }
 
+/**
+ * meta_backend_get_last_device:
+ * @backend: A #MetaBackend
+ *
+ * Gets the last used input device.
+ *
+ * Returns: (transfer none): the #ClutterInputDevice
+ */
+ClutterInputDevice *
+meta_backend_get_last_device (MetaBackend *backend)
+{
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+  ClutterDeviceManager *manager;
+  ClutterInputDevice *device;
+
+  manager = clutter_device_manager_get_default ();
+  device = clutter_device_manager_get_device (manager, priv->current_device_id);
+
+  return device;
+}
+
 void
 meta_backend_update_last_device (MetaBackend *backend,
                                  int          device_id)

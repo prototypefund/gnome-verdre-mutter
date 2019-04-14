@@ -56,6 +56,9 @@ META_EXPORT
 ClutterActor *meta_backend_get_stage (MetaBackend *backend);
 
 META_EXPORT
+ClutterInputDevice *meta_backend_get_last_device (MetaBackend *backend);
+
+META_EXPORT
 MetaDnd      *meta_backend_get_dnd   (MetaBackend *backend);
 
 META_EXPORT
