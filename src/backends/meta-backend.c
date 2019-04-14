@@ -83,7 +83,7 @@ enum
 {
   KEYMAP_CHANGED,
   KEYMAP_LAYOUT_GROUP_CHANGED,
-  LAST_DEVICE_CHANGED,
+  LAST_X11_DEVICE_CHANGED,
   LID_IS_CLOSED_CHANGED,
 
   N_SIGNALS
@@ -721,8 +721,8 @@ meta_backend_class_init (MetaBackendClass *klass)
                   0,
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 1, G_TYPE_UINT);
-  signals[LAST_DEVICE_CHANGED] =
-    g_signal_new ("last-device-changed",
+  signals[LAST_X11_DEVICE_CHANGED] =
+    g_signal_new ("last-x11-device-changed",
                   G_TYPE_FROM_CLASS (object_class),
                   G_SIGNAL_RUN_LAST,
                   0,
@@ -1136,8 +1136,6 @@ meta_backend_update_last_device (MetaBackend *backend,
   device_type = clutter_input_device_get_device_type (device);
   priv->current_device_id = device_id;
 
-  g_signal_emit (backend, signals[LAST_DEVICE_CHANGED], 0,
-                 priv->current_device_id);
 
   switch (device_type)
     {
@@ -1375,4 +1373,12 @@ meta_backend_notify_keymap_layout_group_changed (MetaBackend *backend,
 {
   g_signal_emit (backend, signals[KEYMAP_LAYOUT_GROUP_CHANGED], 0,
                  locked_group);
+}
+
+void
+meta_backend_notify_last_x11_device_changed (MetaBackend *backend,
+                                             int          device_id)
+{
+  g_signal_emit (backend, signals[LAST_X11_DEVICE_CHANGED], 0,
+                 device_id);
 }

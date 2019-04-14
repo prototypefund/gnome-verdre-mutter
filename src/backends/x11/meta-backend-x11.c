@@ -240,6 +240,9 @@ handle_device_change (MetaBackendX11 *x11,
 
   meta_backend_update_last_device (META_BACKEND (x11),
                                    device_changed->sourceid);
+
+  meta_backend_notify_last_x11_device_changed (META_BACKEND (x11),
+                                               device_changed->sourceid);
 }
 
 /* Clutter makes the assumption that there is only one X window

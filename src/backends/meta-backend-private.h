@@ -179,6 +179,9 @@ void meta_backend_notify_keymap_changed (MetaBackend *backend);
 void meta_backend_notify_keymap_layout_group_changed (MetaBackend *backend,
                                                       unsigned int locked_group);
 
+void meta_backend_notify_last_x11_device_changed (MetaBackend *backend,
+                                                  int          device_id);
+
 void meta_backend_notify_ui_scaling_factor_changed (MetaBackend *backend);
 
 #endif /* META_BACKEND_PRIVATE_H */
