@@ -337,19 +337,6 @@ meta_display_handle_event (MetaDisplay        *display,
 
   if (window)
     {
-      /* Events that are likely to trigger compositor gestures should
-       * be known to clutter so they can propagate along the hierarchy.
-       * Gesture-wise, there's two groups of events we should be getting
-       * here:
-       * - CLUTTER_TOUCH_* with a touch sequence that's not yet accepted
-       *   by the gesture tracker, these might trigger gesture actions
-       *   into recognition. Already accepted touch sequences are handled
-       *   directly by meta_gesture_tracker_handle_event().
-       * - CLUTTER_TOUCHPAD_* events over windows. These can likewise
-       *   trigger ::captured-event handlers along the way.
-       */
-      bypass_clutter = !IS_GESTURE_EVENT (event);
-
       meta_window_handle_ungrabbed_event (window, event);
 
       /* This might start a grab op. If it does, then filter out the
@@ -404,10 +391,7 @@ meta_display_handle_event (MetaDisplay        *display,
 
 #ifdef HAVE_WAYLAND
   if (compositor && !bypass_wayland)
-    {
-      if (meta_wayland_compositor_handle_event (compositor, event))
-        bypass_clutter = TRUE;
-    }
+    meta_wayland_compositor_handle_event (compositor, event);
 #endif
 
   display->current_time = META_CURRENT_TIME;
