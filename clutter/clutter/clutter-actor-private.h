@@ -306,6 +306,13 @@ ClutterActorAlign               _clutter_actor_get_effective_x_align            
 void                            _clutter_actor_handle_event                             (ClutterActor       *actor,
                                                                                          const ClutterEvent *event);
 
+ClutterActor *                            _clutter_actor_capture_event                             (ClutterActor       *actor,
+                                                                                         ClutterActor * target,
+                                                                                         const ClutterEvent *event);
+ClutterActor *                            _clutter_actor_bubble_event                             (ClutterActor       *actor,
+                                                                                         ClutterActor * target,
+                                                                                         const ClutterEvent *event);
+
 void                            _clutter_actor_attach_clone                             (ClutterActor *actor,
                                                                                          ClutterActor *clone);
 void                            _clutter_actor_detach_clone                             (ClutterActor *actor,

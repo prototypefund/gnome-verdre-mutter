@@ -20590,6 +20590,68 @@ done:
   g_ptr_array_free (event_tree, TRUE);
 }
 
+ClutterActor *
+_clutter_actor_capture_event (ClutterActor *self,
+                              ClutterActor *target,
+                              const ClutterEvent *event)
+{
+  gboolean is_key_event;
+  ClutterActor *iter;
+  GSList *emit_list = NULL;
+  GSList *l;
+
+  /* XXX - for historical reasons that are now lost in the mists of time,
+   * key events are delivered regardless of whether an actor is set as
+   * reactive; this should be changed for 2.0.
+   */
+  is_key_event = event->type == CLUTTER_KEY_PRESS ||
+                 event->type == CLUTTER_KEY_RELEASE;
+
+  for (iter = target; iter != NULL; iter = iter->priv->parent)
+    {
+      if (CLUTTER_ACTOR_IS_REACTIVE (iter) ||
+          CLUTTER_IS_STAGE (iter) ||
+          is_key_event)
+        emit_list = g_slist_prepend (emit_list, iter);
+
+      if (iter == self)
+        break;
+    }
+
+  for (l = emit_list; l != NULL; l = l->next)
+    if (clutter_actor_event (l->data, event, TRUE))
+      return l->data;
+
+  return NULL;
+}
+
+ClutterActor *
+_clutter_actor_bubble_event (ClutterActor *self,
+                             ClutterActor *target,
+                             const ClutterEvent *event)
+{
+  gboolean is_key_event;
+  ClutterActor *iter;
+
+  /* See above... */
+  is_key_event = event->type == CLUTTER_KEY_PRESS ||
+                 event->type == CLUTTER_KEY_RELEASE;
+
+  for (iter = self; iter != NULL; iter = iter->priv->parent)
+    {
+      if (CLUTTER_ACTOR_IS_REACTIVE (iter) ||
+          CLUTTER_IS_STAGE (iter) ||
+          is_key_event)
+        if (clutter_actor_event (iter, event, FALSE))
+          return iter;
+
+      if (iter == target)
+        break;
+    }
+
+  return NULL;
+}
+
 static void
 clutter_actor_set_child_transform_internal (ClutterActor        *self,
                                             const ClutterMatrix *transform)
