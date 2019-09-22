@@ -172,6 +172,21 @@ CLUTTER_EXPORT
 gboolean                  clutter_input_device_is_grouped       (ClutterInputDevice *device,
                                                                  ClutterInputDevice *other_device);
 
+CLUTTER_EXPORT
+ClutterGrab * clutter_input_device_get_current_grab (ClutterInputDevice *device,
+                                                                ClutterEventSequence *sequence);
+
+CLUTTER_EXPORT
+void clutter_input_device_start_grab (ClutterInputDevice *device,
+                                      ClutterEventSequence *sequence,
+                                      ClutterGrab *grab);
+
+CLUTTER_EXPORT
+void clutter_input_device_end_grab (ClutterInputDevice *device,
+                                    ClutterEventSequence *sequence,
+                                    ClutterGrab *grab);
+
 G_END_DECLS
 
 #endif /* __CLUTTER_INPUT_DEVICE_H__ */
+

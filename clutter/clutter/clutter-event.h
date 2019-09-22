@@ -265,6 +265,7 @@ struct _ClutterCrossingEvent
   ClutterEventFlags flags;
   ClutterStage *stage;
   ClutterActor *source;
+  ClutterCrossingMode mode;
 
   gfloat x;
   gfloat y;

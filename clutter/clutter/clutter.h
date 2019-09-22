@@ -33,6 +33,7 @@
 
 #include "clutter-action.h"
 #include "clutter-actor.h"
+#include "clutter-actor-grab.h"
 #include "clutter-actor-meta.h"
 #include "clutter-align-constraint.h"
 #include "clutter-animatable.h"
@@ -67,6 +68,7 @@
 #include "clutter-fixed-layout.h"
 #include "clutter-flow-layout.h"
 #include "clutter-gesture-action.h"
+#include "clutter-grab.h"
 #include "clutter-grid-layout.h"
 #include "clutter-group.h"
 #include "clutter-image.h"

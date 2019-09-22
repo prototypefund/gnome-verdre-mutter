@@ -14062,7 +14062,7 @@ clutter_actor_lower_bottom (ClutterActor *self)
 gboolean
 clutter_actor_event (ClutterActor       *actor,
                      const ClutterEvent *event,
-		     gboolean            capture)
+                     gboolean            capture)
 {
   gboolean retval = FALSE;
   gint signal_num = -1;
@@ -14072,66 +14072,67 @@ clutter_actor_event (ClutterActor       *actor,
 
   g_object_ref (actor);
 
-  if (capture)
+  switch (event->type)
     {
-      g_signal_emit (actor, actor_signals[CAPTURED_EVENT], 0,
-		     event,
-                     &retval);
-      goto out;
+    case CLUTTER_NOTHING:
+      break;
+    case CLUTTER_BUTTON_PRESS:
+      signal_num = BUTTON_PRESS_EVENT;
+      break;
+    case CLUTTER_BUTTON_RELEASE:
+      signal_num = BUTTON_RELEASE_EVENT;
+      break;
+    case CLUTTER_SCROLL:
+      signal_num = SCROLL_EVENT;
+      break;
+    case CLUTTER_KEY_PRESS:
+      signal_num = KEY_PRESS_EVENT;
+      break;
+    case CLUTTER_KEY_RELEASE:
+      signal_num = KEY_RELEASE_EVENT;
+      break;
+    case CLUTTER_MOTION:
+      signal_num = MOTION_EVENT;
+      break;
+    case CLUTTER_ENTER:
+      signal_num = ENTER_EVENT;
+      break;
+    case CLUTTER_LEAVE:
+      signal_num = LEAVE_EVENT;
+      break;
+    case CLUTTER_TOUCH_BEGIN:
+    case CLUTTER_TOUCH_END:
+    case CLUTTER_TOUCH_UPDATE:
+    case CLUTTER_TOUCH_CANCEL:
+      signal_num = TOUCH_EVENT;
+      break;
+    case CLUTTER_DELETE:
+    case CLUTTER_DESTROY_NOTIFY:
+    case CLUTTER_CLIENT_MESSAGE:
+    default:
+      signal_num = -1;
+      break;
     }
 
-  g_signal_emit (actor, actor_signals[EVENT], 0, event, &retval);
+  if (capture)
+    g_signal_emit (actor, actor_signals[CAPTURED_EVENT], 0, event, &retval);
+  else
+    g_signal_emit (actor, actor_signals[EVENT], 0, event, &retval);
 
   if (!retval)
     {
-      switch (event->type)
-	{
-	case CLUTTER_NOTHING:
-	  break;
-	case CLUTTER_BUTTON_PRESS:
-	  signal_num = BUTTON_PRESS_EVENT;
-	  break;
-	case CLUTTER_BUTTON_RELEASE:
-	  signal_num = BUTTON_RELEASE_EVENT;
-	  break;
-	case CLUTTER_SCROLL:
-	  signal_num = SCROLL_EVENT;
-	  break;
-	case CLUTTER_KEY_PRESS:
-	  signal_num = KEY_PRESS_EVENT;
-	  break;
-	case CLUTTER_KEY_RELEASE:
-	  signal_num = KEY_RELEASE_EVENT;
-	  break;
-	case CLUTTER_MOTION:
-	  signal_num = MOTION_EVENT;
-	  break;
-	case CLUTTER_ENTER:
-	  signal_num = ENTER_EVENT;
-	  break;
-	case CLUTTER_LEAVE:
-	  signal_num = LEAVE_EVENT;
-	  break;
-        case CLUTTER_TOUCH_BEGIN:
-        case CLUTTER_TOUCH_END:
-        case CLUTTER_TOUCH_UPDATE:
-        case CLUTTER_TOUCH_CANCEL:
-          signal_num = TOUCH_EVENT;
-          break;
-	case CLUTTER_DELETE:
-	case CLUTTER_DESTROY_NOTIFY:
-	case CLUTTER_CLIENT_MESSAGE:
-	default:
-	  signal_num = -1;
-	  break;
-	}
-
-      if (signal_num != -1)
-	g_signal_emit (actor, actor_signals[signal_num], 0,
-		       event, &retval);
+      if (capture)
+        {
+          if (signal_num == ENTER_EVENT)
+            g_signal_emit (actor, actor_signals[signal_num], 0, event, &retval);
+        }
+      else
+        {
+          if (signal_num != -1)
+            g_signal_emit (actor, actor_signals[signal_num], 0, event, &retval);
+        }
     }
 
-out:
   g_object_unref (actor);
 
   return retval;

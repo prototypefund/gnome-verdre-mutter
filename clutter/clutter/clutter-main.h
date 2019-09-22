@@ -158,6 +158,18 @@ guint                   clutter_get_default_frame_rate          (void);
 CLUTTER_EXPORT
 gboolean                clutter_check_windowing_backend         (const char *backend_type);
 
+void clutter_emit_event (const ClutterEvent *event,
+                    ClutterActor       *topmost_actor);
+
+void
+clutter_emit_crossing_event (ClutterInputDevice   *device,
+                     ClutterEventSequence *sequence,
+                     ClutterActor         *old_actor,
+                     ClutterActor         *new_actor,
+                     ClutterActor         *topmost_actor,
+                     ClutterActor         *bottommost_actor,
+                     ClutterCrossingMode   mode);
+
 
 G_END_DECLS
 

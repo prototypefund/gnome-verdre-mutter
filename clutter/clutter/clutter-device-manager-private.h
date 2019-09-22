@@ -65,6 +65,9 @@ typedef struct _ClutterTouchInfo
   ClutterEventSequence *sequence;
   ClutterActor *actor;
 
+  ClutterActorGrab *actor_grab;
+  GSList *grab_stack;
+
   gfloat current_x;
   gfloat current_y;
 } ClutterTouchInfo;
@@ -160,6 +163,9 @@ struct _ClutterInputDevice
 
   guint has_cursor : 1;
   guint is_enabled : 1;
+
+  ClutterActorGrab *actor_grab;
+  GSList *grab_stack;
 
   /* Accessiblity */
   ClutterVirtualInputDevice *accessibility_virtual_device;
@@ -296,6 +302,10 @@ ClutterInputDeviceTool * clutter_input_device_lookup_tool       (ClutterInputDev
 CLUTTER_EXPORT
 void            clutter_input_device_add_tool                   (ClutterInputDevice     *device,
                                                                  ClutterInputDeviceTool *tool);
+
+
+CLUTTER_EXPORT
+ClutterActor * _clutter_input_device_get_actor (ClutterInputDevice   *device, ClutterEventSequence *sequence);
 
 CLUTTER_EXPORT
 void            clutter_input_device_update_from_tool           (ClutterInputDevice     *device,

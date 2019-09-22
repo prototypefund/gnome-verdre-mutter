@@ -44,6 +44,7 @@
 #include "clutter-private.h"
 #include "clutter-stage-private.h"
 #include "clutter-input-device-tool.h"
+#include "clutter-actor-grab.h"
 
 #include <math.h>
 
@@ -535,6 +536,10 @@ clutter_input_device_init (ClutterInputDevice *self)
   self->current_button_number = self->previous_button_number = -1;
   self->current_state = self->previous_state = 0;
 
+  ClutterGrab *default_grab = clutter_actor_grab_new (NULL);
+
+  self->grab_stack = g_slist_prepend (NULL, default_grab);
+
   self->touch_sequences_info =
     g_hash_table_new_full (NULL, NULL,
                            NULL, _clutter_input_device_free_touch_info);
@@ -554,6 +559,7 @@ _clutter_input_device_ensure_touch_info (ClutterInputDevice *device,
     {
       info = g_slice_new0 (ClutterTouchInfo);
       info->sequence = sequence;
+      info->grab_stack = clutter_actor_grab_new (NULL);
       g_hash_table_insert (device->touch_sequences_info, sequence, info);
 
       if (g_hash_table_size (device->touch_sequences_info) == 1)
@@ -690,10 +696,17 @@ _clutter_input_device_get_stage (ClutterInputDevice *device)
 static void
 _clutter_input_device_free_touch_info (gpointer data)
 {
+  ClutterTouchInfo *info = data;
+
+  // FIXME: Make sure the g_object_unref() is actually needed
+  g_slist_free_full (info->grab_stack, g_object_unref);
+  if (info->actor_grab != NULL)
+    g_object_unref (info->actor_grab);
+
   g_slice_free (ClutterTouchInfo, data);
 }
 
-static ClutterActor *
+ClutterActor *
 _clutter_input_device_get_actor (ClutterInputDevice   *device,
                                  ClutterEventSequence *sequence)
 {
@@ -1929,24 +1942,10 @@ static void
 on_grab_actor_destroy (ClutterActor       *actor,
                        ClutterInputDevice *device)
 {
-  switch (device->device_type)
-    {
-    case CLUTTER_POINTER_DEVICE:
-    case CLUTTER_TABLET_DEVICE:
-      device->pointer_grab_actor = NULL;
-      break;
-
-    case CLUTTER_KEYBOARD_DEVICE:
-      device->keyboard_grab_actor = NULL;
-      break;
-
-    default:
-      g_assert_not_reached ();
-    }
 }
 
 /**
- * clutter_input_device_grab:
+ * clutter_grab:
  * @device: a #ClutterInputDevice
  * @actor: a #ClutterActor
  *
@@ -1968,40 +1967,15 @@ void
 clutter_input_device_grab (ClutterInputDevice *device,
                            ClutterActor       *actor)
 {
-  ClutterActor **grab_actor;
+// FIXME: might make sense to just add a sequence argument here...
 
   g_return_if_fail (CLUTTER_IS_INPUT_DEVICE (device));
-  g_return_if_fail (CLUTTER_IS_ACTOR (actor));
+  g_return_if_fail (device->actor_grab == NULL);
 
-  switch (device->device_type)
-    {
-    case CLUTTER_POINTER_DEVICE:
-    case CLUTTER_TABLET_DEVICE:
-      grab_actor = &device->pointer_grab_actor;
-      break;
+  device->actor_grab = clutter_actor_grab_new (actor);
 
-    case CLUTTER_KEYBOARD_DEVICE:
-      grab_actor = &device->keyboard_grab_actor;
-      break;
-
-    default:
-      g_critical ("Only pointer and keyboard devices can grab an actor");
-      return;
-    }
-
-  if (*grab_actor != NULL)
-    {
-      g_signal_handlers_disconnect_by_func (*grab_actor,
-                                            G_CALLBACK (on_grab_actor_destroy),
-                                            device);
-    }
-
-  *grab_actor = actor;
-
-  g_signal_connect (*grab_actor,
-                    "destroy",
-                    G_CALLBACK (on_grab_actor_destroy),
-                    device);
+g_warning("INPUTDEVICE: starting traditional grab");
+  clutter_input_device_start_grab (device, NULL, device->actor_grab);
 }
 
 /**
@@ -2015,33 +1989,13 @@ clutter_input_device_grab (ClutterInputDevice *device,
 void
 clutter_input_device_ungrab (ClutterInputDevice *device)
 {
-  ClutterActor **grab_actor;
-
   g_return_if_fail (CLUTTER_IS_INPUT_DEVICE (device));
+  g_return_if_fail (device->actor_grab != NULL);
 
-  switch (device->device_type)
-    {
-    case CLUTTER_POINTER_DEVICE:
-    case CLUTTER_TABLET_DEVICE:
-      grab_actor = &device->pointer_grab_actor;
-      break;
+g_warning("INPUTDEVICE: ending traditional grab");
+  clutter_input_device_end_grab (device, NULL, device->actor_grab);
 
-    case CLUTTER_KEYBOARD_DEVICE:
-      grab_actor = &device->keyboard_grab_actor;
-      break;
-
-    default:
-      return;
-    }
-
-  if (*grab_actor == NULL)
-    return;
-
-  g_signal_handlers_disconnect_by_func (*grab_actor,
-                                        G_CALLBACK (on_grab_actor_destroy),
-                                        device);
-
-  *grab_actor = NULL;
+  device->actor_grab = NULL;
 }
 
 /**
@@ -2059,35 +2013,15 @@ ClutterActor *
 clutter_input_device_get_grabbed_actor (ClutterInputDevice *device)
 {
   g_return_val_if_fail (CLUTTER_IS_INPUT_DEVICE (device), NULL);
+  g_return_val_if_fail (device->actor_grab != NULL, NULL);
 
-  switch (device->device_type)
-    {
-    case CLUTTER_POINTER_DEVICE:
-    case CLUTTER_TABLET_DEVICE:
-      return device->pointer_grab_actor;
-
-    case CLUTTER_KEYBOARD_DEVICE:
-      return device->keyboard_grab_actor;
-
-    default:
-      g_critical ("Only pointer and keyboard devices can grab an actor");
-    }
-
-  return NULL;
+  return clutter_actor_grab_get_grab_actor (device->actor_grab);
 }
 
 static void
 on_grab_sequence_actor_destroy (ClutterActor       *actor,
                                 ClutterInputDevice *device)
 {
-  ClutterEventSequence *sequence =
-    g_hash_table_lookup (device->inv_sequence_grab_actors, actor);
-
-  if (sequence != NULL)
-    {
-      g_hash_table_remove (device->sequence_grab_actors, sequence);
-      g_hash_table_remove (device->inv_sequence_grab_actors, actor);
-    }
 }
 
 /**
@@ -2114,37 +2048,18 @@ clutter_input_device_sequence_grab (ClutterInputDevice   *device,
                                     ClutterEventSequence *sequence,
                                     ClutterActor         *actor)
 {
-  ClutterActor *grab_actor;
-
   g_return_if_fail (CLUTTER_IS_INPUT_DEVICE (device));
-  g_return_if_fail (CLUTTER_IS_ACTOR (actor));
 
-  if (device->sequence_grab_actors == NULL)
-    {
-      grab_actor = NULL;
-      device->sequence_grab_actors = g_hash_table_new (NULL, NULL);
-      device->inv_sequence_grab_actors = g_hash_table_new (NULL, NULL);
-    }
-  else
-    {
-      grab_actor = g_hash_table_lookup (device->sequence_grab_actors, sequence);
-    }
+  ClutterTouchInfo *info =
+    g_hash_table_lookup (device->touch_sequences_info, sequence);
 
-  if (grab_actor != NULL)
-    {
-      g_signal_handlers_disconnect_by_func (grab_actor,
-                                            G_CALLBACK (on_grab_sequence_actor_destroy),
-                                            device);
-      g_hash_table_remove (device->sequence_grab_actors, sequence);
-      g_hash_table_remove (device->inv_sequence_grab_actors, grab_actor);
-    }
+  g_return_if_fail (info != NULL);
+  g_return_if_fail (info->actor_grab == NULL);
 
-  g_hash_table_insert (device->sequence_grab_actors, sequence, actor);
-  g_hash_table_insert (device->inv_sequence_grab_actors, actor, sequence);
-  g_signal_connect (actor,
-                    "destroy",
-                    G_CALLBACK (on_grab_sequence_actor_destroy),
-                    device);
+  info->actor_grab = clutter_actor_grab_new (actor);
+
+g_warning("INPUTDEVICE: starting traditional sequence grab");
+  clutter_input_device_start_grab (device, sequence, info->actor_grab);
 }
 
 /**
@@ -2161,31 +2076,18 @@ void
 clutter_input_device_sequence_ungrab (ClutterInputDevice   *device,
                                       ClutterEventSequence *sequence)
 {
-  ClutterActor *grab_actor;
-
   g_return_if_fail (CLUTTER_IS_INPUT_DEVICE (device));
 
-  if (device->sequence_grab_actors == NULL)
-    return;
+  ClutterTouchInfo *info =
+    g_hash_table_lookup (device->touch_sequences_info, sequence);
 
-  grab_actor = g_hash_table_lookup (device->sequence_grab_actors, sequence);
+  g_return_if_fail (info != NULL);
+  g_return_if_fail (info->actor_grab != NULL);
 
-  if (grab_actor == NULL)
-    return;
+g_warning("INPUTDEVICE: ending traditional sequence grab");
+  clutter_input_device_end_grab (device, sequence, info->actor_grab);
 
-  g_signal_handlers_disconnect_by_func (grab_actor,
-                                        G_CALLBACK (on_grab_sequence_actor_destroy),
-                                        device);
-  g_hash_table_remove (device->sequence_grab_actors, sequence);
-  g_hash_table_remove (device->inv_sequence_grab_actors, grab_actor);
-
-  if (g_hash_table_size (device->sequence_grab_actors) == 0)
-    {
-      g_hash_table_destroy (device->sequence_grab_actors);
-      device->sequence_grab_actors = NULL;
-      g_hash_table_destroy (device->inv_sequence_grab_actors);
-      device->inv_sequence_grab_actors = NULL;
-    }
+  info->actor_grab = NULL;
 }
 
 /**
@@ -2206,10 +2108,13 @@ clutter_input_device_sequence_get_grabbed_actor (ClutterInputDevice   *device,
 {
   g_return_val_if_fail (CLUTTER_IS_INPUT_DEVICE (device), NULL);
 
-  if (device->sequence_grab_actors == NULL)
-    return NULL;
+  ClutterTouchInfo *info =
+    g_hash_table_lookup (device->touch_sequences_info, sequence);
 
-  return g_hash_table_lookup (device->sequence_grab_actors, sequence);
+  g_return_val_if_fail (info != NULL, NULL);
+  g_return_val_if_fail (info->actor_grab != NULL, NULL);
+
+  return clutter_actor_grab_get_grab_actor (info->actor_grab);
 }
 
 /**
@@ -2441,3 +2346,141 @@ clutter_input_device_is_grouped (ClutterInputDevice *device,
 
   return CLUTTER_INPUT_DEVICE_GET_CLASS (device)->is_grouped (device, other_device);
 }
+
+static GSList **
+get_grab_stack (ClutterInputDevice *device, ClutterEventSequence *sequence)
+{
+  if (sequence == NULL)
+    {
+      return &device->grab_stack;
+    }
+  else
+    {
+      ClutterTouchInfo *info =
+        g_hash_table_lookup (device->touch_sequences_info, sequence);
+
+      if (info != NULL)
+        return &info->grab_stack;
+    }
+
+  return NULL;
+}
+
+/**
+ * clutter_input_device_get_current_grab:
+ * @device: a #ClutterInputDevice
+ * @sequence: (allow-none): a #ClutterEventSequence
+ *
+ * Gets the ClutterGrab that's active for this device.
+ *
+ * Returns: (transfer none): The current #ClutterGrab, or %NULL
+ */
+ClutterGrab *
+clutter_input_device_get_current_grab (ClutterInputDevice *device, ClutterEventSequence *sequence)
+{
+  GSList **grab_stack = get_grab_stack (device, sequence);
+
+  if (*grab_stack != NULL)
+    return (*grab_stack)->data;
+  else
+    g_critical ("INPUTDEVICE: grab stack was empty when getting current grab");
+
+  return NULL;
+}
+
+// FIXME: make this private??
+static void
+clutter_input_device_cancel_grab (ClutterInputDevice *device, ClutterEventSequence *sequence)
+{
+  GSList **grab_stack = get_grab_stack (device, sequence);
+  gboolean retval;
+
+  if (*grab_stack != NULL)
+    {
+      retval = clutter_grab_emit_cancel ((*grab_stack)->data);
+
+      if (!retval) {
+        if ((*grab_stack)->next == NULL)
+          {
+            g_critical("INPUTDEVICE: this is the default grab, can't cancel this one");
+            return;
+          }
+
+        g_warning("INPUTDEVICE: cancelling old grab, removing it after requenst");
+
+        *grab_stack = g_slist_delete_link (*grab_stack, *grab_stack);
+      }
+    }
+  else
+    g_critical ("INPUTDEVICE: grab stack was empty when cancelling grab");
+}
+
+/**
+ * clutter_input_device_start_grab:
+ * @device: a #ClutterInputDevice
+ * @sequence: (allow-none): a #ClutterEventSequence
+ * @grab: a #ClutterGrab
+ *
+ * Starts a new grab on the device.
+ */
+void
+clutter_input_device_start_grab (ClutterInputDevice *device, ClutterEventSequence *sequence, ClutterGrab *grab)
+{
+  GSList **grab_stack;
+  ClutterActor *current_actor;
+
+  /* Cancel the current grab before getting the grab stack because
+   * the cancelling might modify the grab stack */
+  clutter_input_device_cancel_grab (device, sequence);
+
+  grab_stack = get_grab_stack (device, sequence);
+
+  *grab_stack = g_slist_prepend (*grab_stack, grab);
+
+g_warning("INPUTDEVICE: starting new grab, length after %d",  g_slist_length (*grab_stack));
+
+// FIXME: figure out when to emit focus events correctly
+
+  current_actor = _clutter_input_device_get_actor (device, sequence);
+  clutter_grab_emit_focus (grab, device, sequence, current_actor, NULL, CLUTTER_CROSSING_GRAB);
+}
+
+/**
+ * clutter_input_device_end_grab:
+ * @device: a #ClutterInputDevice
+ * @sequence: (allow-none): a #ClutterEventSequence
+ * @grab: a #ClutterGrab
+ *
+ * Ends the current grab of the device.
+ */
+void
+clutter_input_device_end_grab (ClutterInputDevice *device,
+                               ClutterEventSequence *sequence,
+                               ClutterGrab *grab)
+{
+  GSList **grab_stack = get_grab_stack (device, sequence);
+  ClutterActor *current_actor;
+
+  if (*grab_stack != NULL && (*grab_stack)->next != NULL)
+    {
+g_warning("INPUTDEVICE: ending grab");
+
+      if ((*grab_stack)->data != grab)
+        {
+          // FIXME: Might make sense to check if this grab is in our stack, end
+          // the ones above, and then end this one. Right now we fail here if an
+          // explicit actor grab (using the old API) is cancelled and an implicit
+          // grab is happening inside this explicit one.
+          g_warning ("INPUTDEVICE: grab is not the current one, not ending it");
+          return;
+        }
+
+      current_actor = _clutter_input_device_get_actor (device, sequence);
+      clutter_grab_emit_focus (grab, device, sequence, NULL, current_actor, CLUTTER_CROSSING_UNGRAB);
+
+      *grab_stack = g_slist_delete_link (*grab_stack, *grab_stack);
+    }
+  else
+    g_critical ("INPUTDEVICE: grab stack was empty or had no ->next when ending grab");
+}
+

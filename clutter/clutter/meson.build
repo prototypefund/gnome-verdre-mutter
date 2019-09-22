@@ -4,6 +4,7 @@ clutter_clutter_includedir = join_paths(clutter_includedir, 'clutter')
 clutter_headers = [
   'clutter.h',
   'clutter-action.h',
+  'clutter-actor-grab.h',
   'clutter-actor-meta.h',
   'clutter-actor.h',
   'clutter-align-constraint.h',
@@ -40,6 +41,7 @@ clutter_headers = [
   'clutter-fixed-layout.h',
   'clutter-flow-layout.h',
   'clutter-gesture-action.h',
+  'clutter-grab.h',
   'clutter-grid-layout.h',
   'clutter-group.h',
   'clutter-image.h',
@@ -92,6 +94,7 @@ clutter_headers = [
 clutter_sources = [
   'clutter-action.c',
   'clutter-actor-box.c',
+  'clutter-actor-grab.c',
   'clutter-actor-meta.c',
   'clutter-actor.c',
   'clutter-align-constraint.c',
@@ -127,6 +130,7 @@ clutter_sources = [
   'clutter-flatten-effect.c',
   'clutter-flow-layout.c',
   'clutter-gesture-action.c',
+  'clutter-grab.c',
   'clutter-grid-layout.c',
   'clutter-image.c',
   'clutter-input-device.c',

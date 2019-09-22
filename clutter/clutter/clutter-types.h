@@ -49,6 +49,7 @@ G_BEGIN_DECLS
 #define CLUTTER_TYPE_RECT               (clutter_rect_get_type ())
 
 typedef struct _ClutterActor                    ClutterActor;
+typedef struct _ClutterActorGrab                ClutterActorGrab;
 
 typedef struct _ClutterStage                    ClutterStage;
 typedef struct _ClutterFrameInfo                ClutterFrameInfo;
@@ -91,6 +92,8 @@ typedef struct _ClutterVertex                   ClutterVertex;
 typedef struct _ClutterAlpha            	ClutterAlpha;
 typedef struct _ClutterAnimation                ClutterAnimation;
 typedef struct _ClutterState            	ClutterState;
+
+typedef struct _ClutterGrab                     ClutterGrab;
 
 typedef struct _ClutterInputDeviceTool          ClutterInputDeviceTool;
 typedef struct _ClutterInputDevice              ClutterInputDevice;
