@@ -58,6 +58,8 @@ struct _ClutterDeviceManagerPrivate
   ClutterKbdA11ySettings kbd_a11y_settings;
   /* Pointer a11y */
   ClutterPointerA11ySettings pointer_a11y_settings;
+
+  ClutterGrab *global_grab;
 };
 
 enum
@@ -750,4 +752,95 @@ clutter_device_manager_set_pointer_a11y_dwell_click_type (ClutterDeviceManager  
   g_return_if_fail (CLUTTER_IS_DEVICE_MANAGER (device_manager));
 
   priv->pointer_a11y_settings.dwell_click_type = click_type;
+}
+
+/**
+ * clutter_device_manager_start_global_grab:
+ * @device_manager: a #ClutterDeviceManager
+ * @grab: The #ClutterGrab
+ *
+ * Starts a new global grab.
+ **/
+void
+clutter_device_manager_start_global_grab (ClutterDeviceManager *device_manager,
+                                          ClutterGrab          *grab)
+{
+  ClutterDeviceManagerPrivate *priv =
+    clutter_device_manager_get_instance_private (device_manager);
+  const GSList *d;
+  ClutterInputDevice *device;
+  ClutterEventSequence *sequence;
+  GHashTableIter iter;
+
+  g_return_if_fail (CLUTTER_IS_DEVICE_MANAGER (device_manager));
+  g_return_if_fail (priv->global_grab != grab);
+
+  for (d = clutter_device_manager_peek_devices (device_manager);
+       d != NULL;
+       d = d->next)
+    {
+      device = d->data;
+
+      g_hash_table_iter_init (&iter, device->touch_sequences_info);
+      while (g_hash_table_iter_next (&iter, (gpointer*) &sequence, NULL))
+        clutter_input_device_start_grab (device, sequence, grab);
+
+      clutter_input_device_start_grab (device, NULL, grab);
+    }
+
+  priv->global_grab = grab;
+}
+
+/**
+ * clutter_device_manager_end_global_grab:
+ * @device_manager: a #ClutterDeviceManager
+ *
+ * Ends the currently active global ClutterGrab.
+ **/
+void
+clutter_device_manager_end_global_grab (ClutterDeviceManager *device_manager)
+{
+  ClutterDeviceManagerPrivate *priv =
+    clutter_device_manager_get_instance_private (device_manager);
+  const GSList *d;
+  ClutterInputDevice *device;
+  ClutterEventSequence *sequence;
+  GHashTableIter iter;
+
+  g_return_if_fail (CLUTTER_IS_DEVICE_MANAGER (device_manager));
+  g_return_if_fail (priv->global_grab != NULL);
+
+  for (d = clutter_device_manager_peek_devices (device_manager);
+       d != NULL;
+       d = d->next)
+    {
+      device = d->data;
+
+      g_hash_table_iter_init (&iter, device->touch_sequences_info);
+      while (g_hash_table_iter_next (&iter, (gpointer*) &sequence, NULL))
+        clutter_input_device_end_grab (device, sequence, priv->global_grab);
+
+      clutter_input_device_end_grab (device, NULL, priv->global_grab);
+    }
+
+  priv->global_grab = NULL;
+}
+
+/**
+ * clutter_device_manager_get_global_grab:
+ * @device_manager: a #ClutterDeviceManager
+ *
+ * Gets the current ClutterGrab that is active for all devices.
+ *
+ * Returns: (transfer none): The global #ClutterGrab, or %NULL
+ **/
+ClutterGrab *
+clutter_device_manager_get_global_grab (ClutterDeviceManager *device_manager)
+{
+  ClutterDeviceManagerPrivate *priv =
+    clutter_device_manager_get_instance_private (device_manager);
+
+  g_return_val_if_fail (CLUTTER_IS_DEVICE_MANAGER (device_manager), NULL);
+
+  return priv->global_grab;
 }

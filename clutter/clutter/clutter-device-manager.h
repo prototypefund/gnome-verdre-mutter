@@ -176,6 +176,17 @@ CLUTTER_EXPORT
 void clutter_device_manager_set_pointer_a11y_dwell_click_type (ClutterDeviceManager             *device_manager,
                                                                ClutterPointerA11yDwellClickType  click_type);
 
+CLUTTER_EXPORT
+void            clutter_device_manager_start_global_grab        (ClutterDeviceManager *device_manager,
+                                                                 ClutterGrab *grab);
+
+CLUTTER_EXPORT
+void            clutter_device_manager_end_global_grab        (ClutterDeviceManager *device_manager);
+
+CLUTTER_EXPORT
+ClutterGrab *   clutter_device_manager_get_global_grab        (ClutterDeviceManager *device_manager);
+
+
 G_END_DECLS
 
 #endif /* __CLUTTER_DEVICE_MANAGER_H__ */

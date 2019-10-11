@@ -539,6 +539,17 @@ clutter_input_device_init (ClutterInputDevice *self)
   ClutterGrab *default_grab = clutter_actor_grab_new (NULL);
 
   self->grab_stack = g_slist_prepend (NULL, default_grab);
+  if (!self->device_manager)
+    g_warning("DEVICE MANAGER IS NO SET ON INIT");
+
+  if (self->device_manager)
+    {
+      ClutterGrab *global_grab;
+
+      global_grab = clutter_device_manager_get_global_grab (self->device_manager);
+      if (global_grab)
+        self->grab_stack = g_slist_prepend (self->grab_stack, global_grab); // FIXME: This is probably to early to use start_grab()
+    }
 
   self->touch_sequences_info =
     g_hash_table_new_full (NULL, NULL,
@@ -557,9 +568,22 @@ _clutter_input_device_ensure_touch_info (ClutterInputDevice *device,
 
   if (info == NULL)
     {
+      ClutterGrab *default_grab = clutter_actor_grab_new (NULL);
+
       info = g_slice_new0 (ClutterTouchInfo);
       info->sequence = sequence;
-      info->grab_stack = clutter_actor_grab_new (NULL);
+      info->actor_grab = NULL;
+      info->grab_stack = g_slist_prepend (NULL, default_grab);
+
+      if (device->device_manager)
+        {
+          ClutterGrab *global_grab;
+
+          global_grab = clutter_device_manager_get_global_grab (device->device_manager);
+          if (global_grab)
+            clutter_input_device_start_grab (device, sequence, global_grab);
+        }
+
       g_hash_table_insert (device->touch_sequences_info, sequence, info);
 
       if (g_hash_table_size (device->touch_sequences_info) == 1)
