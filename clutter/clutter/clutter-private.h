@@ -130,9 +130,11 @@ struct _ClutterMainContext
   /* the main event queue */
   GQueue *events_queue;
 
-  /* the event filters added via clutter_event_add_filter. these are
-   * ordered from least recently added to most recently added */
-  GList *event_filters;
+  /* the early event filters added via clutter_event_add_early_filter */
+  GList *event_early_filters;
+
+  /* the late event filters added via clutter_event_add_late_filter */
+  GList *event_late_filters;
 
   ClutterPickMode  pick_mode;
 

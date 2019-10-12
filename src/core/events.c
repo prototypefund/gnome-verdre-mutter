@@ -209,7 +209,7 @@ maybe_unfreeze_pointer_events (MetaBackend          *backend,
 }
 
 static gboolean
-meta_display_handle_event (MetaDisplay        *display,
+meta_display_handle_event_early (MetaDisplay        *display,
                            const ClutterEvent *event)
 {
   MetaBackend *backend = meta_get_backend ();
@@ -252,6 +252,7 @@ meta_display_handle_event (MetaDisplay        *display,
     }
 #endif
 
+  // FIXME: Move this to a stage event handler?
   if (!display->current_pad_osd &&
       (event->type == CLUTTER_PAD_BUTTON_PRESS ||
        event->type == CLUTTER_PAD_BUTTON_RELEASE ||
@@ -298,10 +299,10 @@ meta_display_handle_event (MetaDisplay        *display,
 
   handle_idletime_for_event (event);
 
-  window = get_window_for_event (display, event);
-
   display->current_time = event->any.time;
 
+  // FIXME: This should probably be moved to the window surface actor event handler
+  window = get_window_for_event (display, event);
   if (window && !window->override_redirect &&
       (event->type == CLUTTER_KEY_PRESS ||
        event->type == CLUTTER_BUTTON_PRESS ||
@@ -324,14 +325,15 @@ meta_display_handle_event (MetaDisplay        *display,
         }
     }
 
+  // FIXME: This should happen using a stage event handler
   gesture_tracker = meta_display_get_gesture_tracker (display);
-
   if (meta_gesture_tracker_handle_event (gesture_tracker, event))
     {
       bypass_wayland = bypass_clutter = TRUE;
       goto out;
     }
 
+  // FIXME: This should happen using a ClutterGrab
   if (display->event_route == META_EVENT_ROUTE_WINDOW_OP)
     {
       if (meta_window_handle_mouse_grab_op_event (window, event))
@@ -342,6 +344,7 @@ meta_display_handle_event (MetaDisplay        *display,
         }
     }
 
+  // FIXME: This should probably be moved to a stage event handler, see last comment in this function
   /* For key events, it's important to enforce single-handling, or
    * we can get into a confused state. So if a keybinding is
    * handled (because it's one of our hot-keys, or because we are
@@ -355,6 +358,7 @@ meta_display_handle_event (MetaDisplay        *display,
       goto out;
     }
 
+  // FIXME: This is no longer needed if window events happen in surface actor event handlers
   /* Do not pass keyboard events to Wayland if key focus is not on the
    * stage in normal mode (e.g. during keynav in the panel)
    */
@@ -367,27 +371,59 @@ meta_display_handle_event (MetaDisplay        *display,
         }
     }
 
+  // FIXME: This is no longer needed if window events happen in surface actor event handlers
   if (display->current_pad_osd)
     {
       bypass_wayland = TRUE;
       goto out;
     }
 
+ out:
+  /* If the compositor has a grab, don't pass that through to Wayland */
+  if (display->event_route == META_EVENT_ROUTE_COMPOSITOR_GRAB)
+    bypass_wayland = TRUE;
+
+  /* If a Wayland client has a grab, don't pass that through to Clutter */
+  if (display->event_route == META_EVENT_ROUTE_WAYLAND_POPUP)
+    bypass_clutter = TRUE;
+
+  // FIXME: Make sure this doesn't break anything
+  display->current_time = META_CURRENT_TIME;
+
+  // FIXME: Since the early handler is called before processing ClutterGrabs, it's also called before
+  // setting up implicit grabs. That means we probably want to change the return type to void here...
+  return bypass_clutter;
+}
+
+
+// FIXME: When we handle window events in the window surface event handlers, we can get rid of this
+static gboolean
+meta_display_handle_event_late (MetaDisplay        *display,
+                           const ClutterEvent *event)
+{
+  MetaBackend *backend = meta_get_backend ();
+  MetaWindow *window;
+  G_GNUC_UNUSED gboolean bypass_wayland = FALSE;
+  MetaGestureTracker *gesture_tracker;
+  ClutterEventSequence *sequence;
+  ClutterInputDevice *source;
+
+  sequence = clutter_event_get_event_sequence (event);
+
+  // FIXME: This can be done using window surface event handlers
+#ifdef HAVE_WAYLAND
+  MetaWaylandCompositor *compositor = NULL;
+  if (meta_is_wayland_compositor ())
+    {
+      compositor = meta_wayland_compositor_get_default ();
+      meta_wayland_compositor_update (compositor, event);
+    }
+#endif
+
+  window = get_window_for_event (display, event);
+
   if (window)
     {
-      /* Events that are likely to trigger compositor gestures should
-       * be known to clutter so they can propagate along the hierarchy.
-       * Gesture-wise, there's two groups of events we should be getting
-       * here:
-       * - CLUTTER_TOUCH_* with a touch sequence that's not yet accepted
-       *   by the gesture tracker, these might trigger gesture actions
-       *   into recognition. Already accepted touch sequences are handled
-       *   directly by meta_gesture_tracker_handle_event().
-       * - CLUTTER_TOUCHPAD_* events over windows. These can likewise
-       *   trigger ::captured-event handlers along the way.
-       */
-      bypass_clutter = !IS_GESTURE_EVENT (event);
-
       /* When double clicking to un-maximize an X11 window under Wayland,
        * there is a race between X11 and Wayland protocols and the X11
        * XConfigureWindow may be processed by Xwayland before the button
@@ -411,7 +447,6 @@ meta_display_handle_event (MetaDisplay        *display,
       if (display->event_route == META_EVENT_ROUTE_WINDOW_OP ||
           display->event_route == META_EVENT_ROUTE_FRAME_BUTTON)
         {
-          bypass_clutter = TRUE;
           bypass_wayland = TRUE;
         }
       else
@@ -428,7 +463,6 @@ meta_display_handle_event (MetaDisplay        *display,
               meta_close_dialog_is_visible (window->close_dialog))
             {
               bypass_wayland = TRUE;
-              bypass_clutter = FALSE;
             }
         }
 
@@ -447,36 +481,44 @@ meta_display_handle_event (MetaDisplay        *display,
   if (display->event_route == META_EVENT_ROUTE_COMPOSITOR_GRAB)
     bypass_wayland = TRUE;
 
-  /* If a Wayland client has a grab, don't pass that through to Clutter */
-  if (display->event_route == META_EVENT_ROUTE_WAYLAND_POPUP)
-    bypass_clutter = TRUE;
-
 #ifdef HAVE_WAYLAND
   if (compositor && !bypass_wayland)
     {
-      if (meta_wayland_compositor_handle_event (compositor, event))
-        bypass_clutter = TRUE;
+      meta_wayland_compositor_handle_event (compositor, event);
     }
 #endif
 
-  display->current_time = META_CURRENT_TIME;
-  return bypass_clutter;
+  return FALSE;
 }
 
 static gboolean
-event_callback (const ClutterEvent *event,
+early_filter_callback (const ClutterEvent *event,
                 gpointer            data)
 {
   MetaDisplay *display = data;
 
-  return meta_display_handle_event (display, event);
+  return meta_display_handle_event_early (display, event);
+}
+
+static gboolean
+late_filter_callback (const ClutterEvent *event,
+                gpointer            data)
+{
+  MetaDisplay *display = data;
+
+  return meta_display_handle_event_late (display, event);
 }
 
 void
 meta_display_init_events (MetaDisplay *display)
 {
-  display->clutter_event_filter = clutter_event_add_filter (NULL,
-                                                            event_callback,
+  display->clutter_event_early_filter = clutter_event_add_early_filter (NULL,
+                                                            early_filter_callback,
+                                                            NULL,
+                                                            display);
+
+  display->clutter_event_late_filter = clutter_event_add_late_filter (NULL,
+                                                            late_filter_callback,
                                                             NULL,
                                                             display);
 }
@@ -484,6 +526,8 @@ meta_display_init_events (MetaDisplay *display)
 void
 meta_display_free_events (MetaDisplay *display)
 {
-  clutter_event_remove_filter (display->clutter_event_filter);
-  display->clutter_event_filter = 0;
+  clutter_event_remove_early_filter (display->clutter_event_early_filter);
+  clutter_event_remove_late_filter (display->clutter_event_late_filter);
+  display->clutter_event_early_filter = 0;
+  display->clutter_event_late_filter = 0;
 }

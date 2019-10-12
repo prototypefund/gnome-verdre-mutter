@@ -1624,11 +1624,13 @@ clutter_emit_event (const ClutterEvent *event,
       return;
     }
 
-  if (_clutter_event_process_filters (event))
-    return;
+  if (!_clutter_event_process_early_filters (event))
+    {
+      if (_clutter_actor_capture_event (grab_actor, source_actor, event) == NULL)
+        _clutter_actor_bubble_event (source_actor, grab_actor, event);
+    }
 
-  if (_clutter_actor_capture_event (grab_actor, source_actor, event) == NULL)
-    _clutter_actor_bubble_event (source_actor, grab_actor, event);
+  _clutter_event_process_late_filters (event);
 }
 
 static ClutterEvent *
@@ -1684,8 +1686,14 @@ clutter_emit_crossing_event (ClutterInputDevice   *device,
       if (bottommost_actor != NULL)
         old_actor = bottommost_actor;
 
-      if (_clutter_actor_capture_event (topmost_actor, old_actor, event) == NULL)
-        _clutter_actor_bubble_event (old_actor, topmost_actor, event);
+      // FIXME: This actually includes the topmost actor (we don't really want to emit the event to the topmost)
+      if (!_clutter_event_process_early_filters (event))
+        {
+          if (_clutter_actor_capture_event (topmost_actor, old_actor, event) == NULL)
+            _clutter_actor_bubble_event (old_actor, topmost_actor, event);
+        }
+
+      _clutter_event_process_late_filters (event);
 
       clutter_event_free (event);
     }
@@ -1699,8 +1707,14 @@ clutter_emit_crossing_event (ClutterInputDevice   *device,
       if (bottommost_actor != NULL)
          new_actor = bottommost_actor;
 
-      if (_clutter_actor_capture_event (topmost_actor, new_actor, event) == NULL)
-        _clutter_actor_bubble_event (new_actor, topmost_actor, event);
+      // FIXME: This actually includes the topmost actor (we don't really want to emit the event to the topmost)
+      if (!_clutter_event_process_early_filters (event))
+        {
+          if (_clutter_actor_capture_event (topmost_actor, new_actor, event) == NULL)
+            _clutter_actor_bubble_event (new_actor, topmost_actor, event);
+        }
+
+      _clutter_event_process_late_filters (event);
 
       clutter_event_free (event);
     }
@@ -1956,9 +1970,11 @@ _clutter_process_event_details (ClutterActor *stage,
       clutter_input_device_update_from_tool (clutter_event_get_source_device (event),
                                              clutter_event_get_device_tool (event));
 
-      if (!_clutter_event_process_filters (event))
+      if (!_clutter_event_process_early_filters (event))
         if (!clutter_actor_event (stage, event, TRUE))
           clutter_actor_event (stage, event, FALSE);
+
+      _clutter_event_process_late_filters (event);
       break;
 
     case CLUTTER_DESTROY_NOTIFY:
@@ -1966,8 +1982,10 @@ _clutter_process_event_details (ClutterActor *stage,
     case CLUTTER_STAGE_STATE:
       event->any.source = stage;
 
-      if (!_clutter_event_process_filters (event))
+      if (!_clutter_event_process_early_filters (event))
         clutter_stage_event (CLUTTER_STAGE (stage), event);
+
+      _clutter_event_process_late_filters (event);
       break;
 
     case CLUTTER_NOTHING:

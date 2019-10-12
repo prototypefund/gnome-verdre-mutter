@@ -607,12 +607,19 @@ CLUTTER_EXPORT
 void                    clutter_event_put                       (const ClutterEvent     *event);
 
 CLUTTER_EXPORT
-guint                   clutter_event_add_filter                (ClutterStage          *stage,
+guint                   clutter_event_add_early_filter                (ClutterStage          *stage,
                                                                  ClutterEventFilterFunc func,
                                                                  GDestroyNotify         notify,
                                                                  gpointer               user_data);
 CLUTTER_EXPORT
-void                    clutter_event_remove_filter             (guint                  id);
+guint                   clutter_event_add_late_filter                (ClutterStage          *stage,
+                                                                 ClutterEventFilterFunc func,
+                                                                 GDestroyNotify         notify,
+                                                                 gpointer               user_data);
+CLUTTER_EXPORT
+void                    clutter_event_remove_early_filter             (guint                  id);
+CLUTTER_EXPORT
+void                    clutter_event_remove_late_filter             (guint                  id);
 
 CLUTTER_EXPORT
 ClutterEvent *          clutter_event_new                       (ClutterEventType        type);

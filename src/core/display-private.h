@@ -111,7 +111,8 @@ struct _MetaDisplay
 
   MetaX11Display *x11_display;
 
-  int clutter_event_filter;
+  int clutter_event_early_filter;
+  int clutter_event_late_filter;
 
   /* Our best guess as to the "currently" focused window (that is, the
    * window that we expect will be focused at the point when the X
