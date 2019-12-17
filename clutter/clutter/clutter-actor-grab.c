@@ -60,8 +60,60 @@ focus_event (ClutterGrab          *grab,
   ClutterActorGrabPrivate *priv =
     clutter_actor_grab_get_instance_private (CLUTTER_ACTOR_GRAB (grab));
 
+  ClutterActor *topmost_actor = NULL;
+  ClutterActor *bottommost_actor = NULL;
+
+  if (priv->grab_actor != NULL)
+    {
+      if (mode == CLUTTER_CROSSING_GRAB)
+        if (clutter_actor_contains (priv->grab_actor, old_actor))
+          bottommost_actor = priv->grab_actor;
+
+      if (mode == CLUTTER_CROSSING_UNGRAB)
+        if (clutter_actor_contains (priv->grab_actor, new_actor))
+          bottommost_actor = priv->grab_actor;
+    }
+
+  if (old_actor != NULL && new_actor != NULL)
+    {
+      if (priv->grab_actor != NULL)
+        {
+          topmost_actor = priv->grab_actor;
+
+          gboolean grab_contains_old_actor =
+            clutter_actor_contains (priv->grab_actor, old_actor);
+
+          gboolean grab_contains_new_actor =
+            clutter_actor_contains (priv->grab_actor, new_actor);
+
+          if (!grab_contains_old_actor &&
+              !grab_contains_new_actor)
+            return;
+
+          if (grab_contains_old_actor &&
+              !grab_contains_new_actor)
+            new_actor = NULL;
+
+          if (!grab_contains_old_actor &&
+              grab_contains_new_actor)
+            old_actor = NULL;
+        }
+      else
+        {
+          /* We emit leave-events from the just left actor up to the common ancestor
+           * and enter-events down to the just entered actor again. */
+          for (topmost_actor = old_actor;
+               topmost_actor != NULL;
+               topmost_actor = clutter_actor_get_parent (topmost_actor))
+            {
+              if (clutter_actor_contains (topmost_actor, new_actor))
+                break;
+            }
+        }
+    }
+
   clutter_emit_crossing_event (device, sequence, old_actor, new_actor,
-                               priv->grab_actor, mode);
+                               topmost_actor, bottommost_actor, mode);
 
   CLUTTER_GRAB_CLASS (clutter_actor_grab_parent_class)->focus_event (grab, device,
     sequence, old_actor, new_actor, mode);

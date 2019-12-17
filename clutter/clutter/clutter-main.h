@@ -208,13 +208,14 @@ void                    clutter_remove_debug_flags              (ClutterDebugFla
                                                                  ClutterPickDebugFlag pick_flags);
 
 void                    clutter_emit_event                      (const ClutterEvent *event,
-                                                                 ClutterActor       *grab_actor);
+                                                                 ClutterActor       *topmost_actor);
 
 void                    clutter_emit_crossing_event             (ClutterInputDevice   *device,
                                                                  ClutterEventSequence *sequence,
                                                                  ClutterActor         *old_actor,
                                                                  ClutterActor         *new_actor,
-                                                                 ClutterActor         *grab_actor,
+                                                                 ClutterActor         *topmost_actor,
+                                                                 ClutterActor         *bottommost_actor,
                                                                  ClutterCrossingMode   mode);
 
 G_END_DECLS

@@ -104,6 +104,11 @@ static ClutterTextDirection clutter_text_direction = CLUTTER_TEXT_DIRECTION_LTR;
 static guint clutter_main_loop_level         = 0;
 static GSList *main_loops                    = NULL;
 
+static GHashTable *device_implicit_grabs = NULL;
+
+  // FIXME: not sure that's a good idea...
+static GHashTable *sequence_implicit_grabs = NULL;
+
 /* debug flags */
 guint clutter_debug_flags       = 0;
 guint clutter_paint_debug_flags = 0;
@@ -916,6 +921,9 @@ clutter_init_real (GError **error)
   ctx = _clutter_context_get_default ();
   backend = ctx->backend;
 
+  device_implicit_grabs = g_hash_table_new (NULL, NULL);
+  sequence_implicit_grabs = g_hash_table_new (NULL, NULL);
+
   if (!ctx->options_parsed)
     {
       if (error)
@@ -1605,18 +1613,14 @@ clutter_do_event (ClutterEvent *event)
 
 void
 clutter_emit_event (const ClutterEvent *event,
-                    ClutterActor       *grab_actor)
+                    ClutterActor       *topmost_actor)
 {
-  ClutterInputDevice *device;
-  ClutterActor *source_actor;
-
-  device = clutter_event_get_device (event);
-  source_actor = event->any.source;
-
-  if (grab_actor == NULL)
-    grab_actor = CLUTTER_ACTOR (_clutter_input_device_get_stage (device));
-  else
-    source_actor = grab_actor;
+  ClutterEventType type = clutter_event_type (event);
+  ClutterInputDevice *device = clutter_event_get_device (event);
+  ClutterEventSequence *sequence = clutter_event_get_event_sequence (event);
+  ClutterActor *source_actor = event->any.source;
+  ClutterActor *bottommost_actor = NULL;
+  ClutterGrab *grab;
 
   if (source_actor == NULL)
     {
@@ -1624,10 +1628,81 @@ clutter_emit_event (const ClutterEvent *event,
       return;
     }
 
+  switch (event->type)
+    {
+    case CLUTTER_BUTTON_PRESS:
+      if (event->button.click_count == 1)
+        g_hash_table_insert (device_implicit_grabs, device, source_actor);
+      else
+        bottommost_actor = g_hash_table_lookup (device_implicit_grabs, device);
+
+      break;
+
+    case CLUTTER_MOTION:
+      if (event->button.click_count > 0)
+        bottommost_actor = g_hash_table_lookup (device_implicit_grabs, device);
+
+      break;
+
+    case CLUTTER_BUTTON_RELEASE:
+      bottommost_actor = g_hash_table_lookup (device_implicit_grabs, device);
+      if (event->button.click_count == 1) // FIXME: a correct click count would be 0 here
+        g_hash_table_remove (device_implicit_grabs, device);
+
+  grab = clutter_input_device_get_current_grab (device, NULL);
+      /* If the current pointer actor is not part of the implicit grab, emit
+       * a synthesized enter event to it. */
+      if (!clutter_actor_contains (bottommost_actor, source_actor))
+        clutter_grab_emit_focus (grab, device, NULL, NULL, source_actor, CLUTTER_CROSSING_UNGRAB);
+
+      break;
+
+    case CLUTTER_TOUCH_BEGIN:
+      g_hash_table_insert (sequence_implicit_grabs, sequence, source_actor);
+      break;
+
+    case CLUTTER_TOUCH_UPDATE:
+      bottommost_actor = g_hash_table_lookup (sequence_implicit_grabs, sequence);
+      break;
+
+    case CLUTTER_TOUCH_END:
+    case CLUTTER_TOUCH_CANCEL:
+      bottommost_actor = g_hash_table_lookup (sequence_implicit_grabs, sequence);
+      g_hash_table_remove (sequence_implicit_grabs, sequence);
+
+  grab = clutter_input_device_get_current_grab (device, sequence);
+      if (!clutter_actor_contains (bottommost_actor, source_actor))
+        clutter_grab_emit_focus (grab, device, sequence, NULL, source_actor, CLUTTER_CROSSING_UNGRAB);
+
+      break;
+
+    default:
+      break;
+    }
+
+  /* If we have a topmost (or grab-) actor set and this actor doesn't contain
+   * the source actor, only emit the event to the topmost actor. */
+  if (topmost_actor != NULL &&
+      !clutter_actor_contains (topmost_actor, source_actor))
+    bottommost_actor = topmost_actor;
+
+  if (bottommost_actor == NULL ||
+      clutter_actor_contains (bottommost_actor, source_actor))
+    bottommost_actor = source_actor;
+
+  if (topmost_actor == NULL)
+    topmost_actor = CLUTTER_ACTOR (event->any.stage);
+
+  if (!clutter_actor_contains (topmost_actor, bottommost_actor))
+    {
+      g_critical("GRAB: topmost doesn't contain bottommost actor, cancelling emission");
+      return;
+    }
+
   if (!_clutter_event_process_early_filters (event))
     {
-      if (_clutter_actor_capture_event (grab_actor, source_actor, event) == NULL)
-        _clutter_actor_bubble_event (source_actor, grab_actor, event);
+      if (_clutter_actor_capture_event (topmost_actor, bottommost_actor, event) == NULL)
+        _clutter_actor_bubble_event (bottommost_actor, topmost_actor, event);
     }
 
   _clutter_event_process_late_filters (event);
@@ -1662,20 +1737,50 @@ clutter_emit_crossing_event (ClutterInputDevice   *device,
                              ClutterEventSequence *sequence,
                              ClutterActor         *old_actor,
                              ClutterActor         *new_actor,
-                             ClutterActor         *grab_actor,
+                             ClutterActor         *topmost_actor,
+                             ClutterActor         *bottommost_actor,
                              ClutterCrossingMode   mode)
 {
   ClutterEvent *event;
-  ClutterActor *topmost_actor = NULL;
-  ClutterActor *bottommost_actor = NULL;
+  ClutterActor *common_ancestor;
+  ClutterActor *implicit_grab_actor;
 
-  topmost_actor = CLUTTER_ACTOR (_clutter_input_device_get_stage (device));
+  if (sequence != NULL)
+    implicit_grab_actor = g_hash_table_lookup (sequence_implicit_grabs, sequence);
+  else
+    implicit_grab_actor = g_hash_table_lookup (device_implicit_grabs, device);
 
-  if (grab_actor != NULL)
+  if (implicit_grab_actor != NULL &&
+      old_actor != NULL &&
+      new_actor != NULL)
     {
-      topmost_actor = grab_actor;
-      bottommost_actor = grab_actor;
+      gboolean grab_contains_old_actor =
+        clutter_actor_contains (implicit_grab_actor, old_actor);
+
+      gboolean grab_contains_new_actor =
+        clutter_actor_contains (implicit_grab_actor, new_actor);
+
+      if (!grab_contains_old_actor &&
+          !grab_contains_new_actor) {
+g_warning("IMPL grab crossing doesn't contain old and new actor");
+        return;
+}
+
+      if (grab_contains_old_actor &&
+          !grab_contains_new_actor) {
+g_warning("IMPL grab crossing doesn't contain new actor");
+        new_actor = NULL;
+}
+
+      if (!grab_contains_old_actor &&
+          grab_contains_new_actor) {
+g_warning("IMPL grab crossing doesn't contain old actor");
+        old_actor = NULL;
+}
     }
+
+  if (topmost_actor == NULL)
+    topmost_actor = CLUTTER_ACTOR (_clutter_input_device_get_stage (device));
 
   if (old_actor != NULL)
     {
@@ -1689,8 +1794,7 @@ clutter_emit_crossing_event (ClutterInputDevice   *device,
       // FIXME: This actually includes the topmost actor (we don't really want to emit the event to the topmost)
       if (!_clutter_event_process_early_filters (event))
         {
-          if (_clutter_actor_capture_event (topmost_actor, old_actor, event) == NULL)
-            _clutter_actor_bubble_event (old_actor, topmost_actor, event);
+          _clutter_actor_bubble_event (old_actor, topmost_actor, event);
         }
 
       _clutter_event_process_late_filters (event);
@@ -1710,8 +1814,7 @@ clutter_emit_crossing_event (ClutterInputDevice   *device,
       // FIXME: This actually includes the topmost actor (we don't really want to emit the event to the topmost)
       if (!_clutter_event_process_early_filters (event))
         {
-          if (_clutter_actor_capture_event (topmost_actor, new_actor, event) == NULL)
-            _clutter_actor_bubble_event (new_actor, topmost_actor, event);
+          _clutter_actor_capture_event (topmost_actor, new_actor, event);
         }
 
       _clutter_event_process_late_filters (event);
