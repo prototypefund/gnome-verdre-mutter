@@ -60,7 +60,8 @@ focus_event (ClutterGrab          *grab,
   ClutterActorGrabPrivate *priv =
     clutter_actor_grab_get_instance_private (CLUTTER_ACTOR_GRAB (grab));
 
-  clutter_emit_crossing_event (device, sequence, old_actor, new_actor, mode);
+  clutter_emit_crossing_event (device, sequence, old_actor, new_actor,
+                               priv->grab_actor, mode);
 
   CLUTTER_GRAB_CLASS (clutter_actor_grab_parent_class)->focus_event (grab, device,
     sequence, old_actor, new_actor, mode);
@@ -115,11 +116,11 @@ scroll_event (ClutterGrab *grab,
 }
 
 static void
-touchpad_gesture_event (ClutterActorGrab *grab,
+touchpad_gesture_event (ClutterGrab *grab,
                           const ClutterEvent     *event)
 {
   ClutterActorGrabPrivate *priv =
-    clutter_actor_grab_get_instance_private (grab);
+    clutter_actor_grab_get_instance_private (CLUTTER_ACTOR_GRAB (grab));
 
   clutter_emit_event (event, priv->grab_actor);
 

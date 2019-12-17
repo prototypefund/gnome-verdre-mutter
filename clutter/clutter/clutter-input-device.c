@@ -1987,13 +1987,18 @@ g_warning("INPUTDEVICE: starting traditional grab");
 void
 clutter_input_device_ungrab (ClutterInputDevice *device)
 {
+  ClutterGrab *actor_grab;
+
   g_return_if_fail (CLUTTER_IS_INPUT_DEVICE (device));
   g_return_if_fail (device->actor_grab != NULL);
 
-g_warning("INPUTDEVICE: ending traditional grab");
-  clutter_input_device_end_grab (device, NULL, device->actor_grab);
-
+  actor_grab = device->actor_grab;
   device->actor_grab = NULL;
+
+g_warning("INPUTDEVICE: ending traditional grab");
+  clutter_input_device_end_grab (device, NULL, actor_grab);
+
+
 }
 
 /**

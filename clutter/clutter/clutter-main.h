@@ -207,6 +207,16 @@ void                    clutter_remove_debug_flags              (ClutterDebugFla
                                                                  ClutterDrawDebugFlag draw_flags,
                                                                  ClutterPickDebugFlag pick_flags);
 
+void                    clutter_emit_event                      (const ClutterEvent *event,
+                                                                 ClutterActor       *grab_actor);
+
+void                    clutter_emit_crossing_event             (ClutterInputDevice   *device,
+                                                                 ClutterEventSequence *sequence,
+                                                                 ClutterActor         *old_actor,
+                                                                 ClutterActor         *new_actor,
+                                                                 ClutterActor         *grab_actor,
+                                                                 ClutterCrossingMode   mode);
+
 G_END_DECLS
 
 #endif /* _CLUTTER_MAIN_H__ */
