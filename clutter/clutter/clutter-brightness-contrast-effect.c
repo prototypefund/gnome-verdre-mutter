@@ -119,17 +119,6 @@ G_DEFINE_TYPE (ClutterBrightnessContrastEffect,
                CLUTTER_TYPE_OFFSCREEN_EFFECT);
 
 static gboolean
-will_have_no_effect (ClutterBrightnessContrastEffect *self)
-{
-  return (self->brightness_red == no_change &&
-          self->brightness_green == no_change &&
-          self->brightness_blue == no_change &&
-          self->contrast_red == no_change &&
-          self->contrast_green == no_change &&
-          self->contrast_blue == no_change);
-}
-
-static gboolean
 clutter_brightness_contrast_effect_pre_paint (ClutterEffect       *effect,
                                               ClutterPaintContext *paint_context)
 {
@@ -137,9 +126,6 @@ clutter_brightness_contrast_effect_pre_paint (ClutterEffect       *effect,
   ClutterEffectClass *parent_class;
 
   if (!clutter_actor_meta_get_enabled (CLUTTER_ACTOR_META (effect)))
-    return FALSE;
-
-  if (will_have_no_effect (self))
     return FALSE;
 
   if (!clutter_feature_available (CLUTTER_FEATURE_SHADERS_GLSL))
