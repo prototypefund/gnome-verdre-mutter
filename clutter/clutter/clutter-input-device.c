@@ -540,28 +540,6 @@ clutter_input_device_init (ClutterInputDevice *self)
   self->inv_touch_sequence_actors = g_hash_table_new (NULL, NULL);
 }
 
-static ClutterTouchInfo *
-_clutter_input_device_ensure_touch_info (ClutterInputDevice *device,
-                                         ClutterEventSequence *sequence,
-                                         ClutterStage *stage)
-{
-  ClutterTouchInfo *info;
-
-  info = g_hash_table_lookup (device->touch_sequences_info, sequence);
-
-  if (info == NULL)
-    {
-      info = g_slice_new0 (ClutterTouchInfo);
-      info->sequence = sequence;
-      g_hash_table_insert (device->touch_sequences_info, sequence, info);
-
-      if (g_hash_table_size (device->touch_sequences_info) == 1)
-        _clutter_input_device_set_stage (device, stage);
-    }
-
-  return info;
-}
-
 /*< private >
  * clutter_input_device_set_coords:
  * @device: a #ClutterInputDevice
@@ -575,8 +553,7 @@ void
 _clutter_input_device_set_coords (ClutterInputDevice   *device,
                                   ClutterEventSequence *sequence,
                                   gfloat                x,
-                                  gfloat                y,
-                                  ClutterStage         *stage)
+                                  gfloat                y)
 {
   g_return_if_fail (CLUTTER_IS_INPUT_DEVICE (device));
 
@@ -591,7 +568,10 @@ _clutter_input_device_set_coords (ClutterInputDevice   *device,
   else
     {
       ClutterTouchInfo *info;
-      info = _clutter_input_device_ensure_touch_info (device, sequence, stage);
+
+      info = g_hash_table_lookup (device->touch_sequences_info, sequence);
+      g_assert (info != NULL);
+
       info->current_x = x;
       info->current_y = y;
     }
@@ -704,9 +684,10 @@ _clutter_input_device_associate_actor (ClutterInputDevice   *device,
       GList *sequences =
         g_hash_table_lookup (device->inv_touch_sequence_actors, actor);
       ClutterTouchInfo *info;
-      ClutterStage *stage = CLUTTER_STAGE (clutter_actor_get_stage (actor));
 
-      info = _clutter_input_device_ensure_touch_info (device, sequence, stage);
+      info = g_hash_table_lookup (device->touch_sequences_info, sequence);
+      g_assert (info != NULL);
+
       info->actor = actor;
 
       g_hash_table_insert (device->inv_touch_sequence_actors,
@@ -737,11 +718,12 @@ _clutter_input_device_unassociate_actor (ClutterInputDevice   *device,
 
       for (l = sequences; l != NULL; l = l->next)
         {
-          ClutterTouchInfo *info =
-            g_hash_table_lookup (device->touch_sequences_info, l->data);
+          ClutterTouchInfo *info;
 
-          if (info)
-            info->actor = NULL;
+          info = g_hash_table_lookup (device->touch_sequences_info, l->data);
+          g_assert (info != NULL);
+
+          info->actor = NULL;
         }
 
       g_list_free (sequences);
@@ -991,8 +973,7 @@ clutter_input_device_get_coords (ClutterInputDevice   *device,
       ClutterTouchInfo *info =
         g_hash_table_lookup (device->touch_sequences_info, sequence);
 
-      if (info == NULL)
-        return FALSE;
+      g_return_val_if_fail (info != NULL, FALSE);
 
       point->x = info->current_x;
       point->y = info->current_y;
@@ -1258,7 +1239,7 @@ clutter_input_device_update_from_event (ClutterInputDevice *device,
   sequence = clutter_event_get_event_sequence (event);
   clutter_event_get_coords (event, &event_x, &event_y);
 
-  _clutter_input_device_set_coords (device, sequence, event_x, event_y, event_stage);
+  _clutter_input_device_set_coords (device, sequence, event_x, event_y);
   _clutter_input_device_set_state (device, event_state);
   _clutter_input_device_set_time (device, event_time);
 
@@ -1655,20 +1636,21 @@ _clutter_input_device_remove_slave (ClutterInputDevice *master,
  * actor underneath the touch point).
  */
 void
-_clutter_input_device_add_event_sequence (ClutterInputDevice *device,
-                                          ClutterEvent       *event)
+_clutter_input_device_add_event_sequence (ClutterInputDevice   *device,
+                                          ClutterEventSequence *sequence,
+                                          ClutterActor         *stage)
 {
-  ClutterEventSequence *sequence = clutter_event_get_event_sequence (event);
-  ClutterStage *stage;
+  ClutterTouchInfo *info;
 
-  if (sequence == NULL)
-    return;
+  g_return_if_fail (sequence != NULL);
 
-  stage = clutter_event_get_stage (event);
-  if (stage == NULL)
-    return;
+  info = g_slice_new0 (ClutterTouchInfo);
+  info->sequence = sequence;
 
-  _clutter_input_device_ensure_touch_info (device, sequence, stage);
+  g_hash_table_insert (device->touch_sequences_info, sequence, info);
+
+  if (g_hash_table_size (device->touch_sequences_info) == 1)
+    _clutter_input_device_set_stage (device, CLUTTER_STAGE (stage));
 }
 
 /*< private >
@@ -1679,15 +1661,13 @@ _clutter_input_device_add_event_sequence (ClutterInputDevice *device,
  * Stop tracking informations related to a touch point.
  */
 void
-_clutter_input_device_remove_event_sequence (ClutterInputDevice *device,
-                                             ClutterEvent       *event)
+_clutter_input_device_remove_event_sequence (ClutterInputDevice   *device,
+                                             ClutterEventSequence *sequence)
 {
-  ClutterEventSequence *sequence = clutter_event_get_event_sequence (event);
   ClutterTouchInfo *info =
     g_hash_table_lookup (device->touch_sequences_info, sequence);
 
-  if (info == NULL)
-    return;
+  g_return_if_fail (info != NULL);
 
   if (info->actor != NULL)
     {

@@ -1747,6 +1747,9 @@ _clutter_process_event_details (ClutterActor        *stage,
   event_time = clutter_event_get_time (event);
   clutter_event_get_coords (event, &event_x, &event_y);
 
+  if (event->type == CLUTTER_TOUCH_BEGIN)
+    _clutter_input_device_add_event_sequence (device, sequence, stage);
+
   _clutter_input_device_set_state (device, event_state);
   _clutter_input_device_set_time (device, event_time);
   _clutter_input_device_set_coords (device, sequence, event_x, event_y);
@@ -2034,9 +2037,6 @@ _clutter_process_event_details (ClutterActor        *stage,
           ClutterActor *actor;
           gfloat x, y;
 
-          if (event->type == CLUTTER_TOUCH_BEGIN)
-            _clutter_input_device_add_event_sequence (device, event);
-
           clutter_event_get_coords (event, &x, &y);
 
           /* Only do a pick to find the source if source is not already set
@@ -2060,7 +2060,7 @@ _clutter_process_event_details (ClutterActor        *stage,
                   emit_touch_event (event, device);
 
                   if (event->type == CLUTTER_TOUCH_END)
-                    _clutter_input_device_remove_event_sequence (device, event);
+                    _clutter_input_device_remove_event_sequence (device, sequence);
 
                   break;
                 }
@@ -2095,7 +2095,7 @@ _clutter_process_event_details (ClutterActor        *stage,
           emit_touch_event (event, device);
 
           if (event->type == CLUTTER_TOUCH_END)
-            _clutter_input_device_remove_event_sequence (device, event);
+            _clutter_input_device_remove_event_sequence (device, sequence);
 
           break;
         }
