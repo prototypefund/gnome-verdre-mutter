@@ -1735,7 +1735,21 @@ _clutter_process_event_details (ClutterActor        *stage,
                                 ClutterMainContext  *context,
                                 ClutterEvent        *event)
 {
-  ClutterInputDevice *device = clutter_event_get_device (event);
+  ClutterInputDevice *device;
+  ClutterEventSequence *sequence;
+  ClutterModifierType event_state;
+  guint32 event_time;
+  gfloat event_x, event_y;
+
+  device = clutter_event_get_device (event);
+  sequence = clutter_event_get_event_sequence (event);
+  event_state = clutter_event_get_state (event);
+  event_time = clutter_event_get_time (event);
+  clutter_event_get_coords (event, &event_x, &event_y);
+
+  _clutter_input_device_set_state (device, event_state);
+  _clutter_input_device_set_time (device, event_time);
+  _clutter_input_device_set_coords (device, sequence, event_x, event_y);
 
   switch (event->type)
     {
@@ -2018,11 +2032,7 @@ _clutter_process_event_details (ClutterActor        *stage,
       case CLUTTER_TOUCH_END:
         {
           ClutterActor *actor;
-          ClutterEventSequence *sequence;
           gfloat x, y;
-
-          sequence =
-            clutter_event_get_event_sequence (event);
 
           if (event->type == CLUTTER_TOUCH_BEGIN)
             _clutter_input_device_add_event_sequence (device, event);
