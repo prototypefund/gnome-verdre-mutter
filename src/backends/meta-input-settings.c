@@ -559,8 +559,8 @@ update_touchpad_tap_enabled (MetaInputSettings  *input_settings,
 
   priv = meta_input_settings_get_instance_private (input_settings);
   input_settings_class = META_INPUT_SETTINGS_GET_CLASS (input_settings);
-  enabled = device_is_tablet_touchpad (input_settings, device) ||
-    g_settings_get_boolean (priv->touchpad_settings, "tap-to-click");
+  enabled = (device && device_is_tablet_touchpad (input_settings, device)) ||
+            g_settings_get_boolean (priv->touchpad_settings, "tap-to-click");
 
   if (device)
     {
@@ -590,8 +590,8 @@ update_touchpad_tap_and_drag_enabled (MetaInputSettings  *input_settings,
 
   priv = meta_input_settings_get_instance_private (input_settings);
   input_settings_class = META_INPUT_SETTINGS_GET_CLASS (input_settings);
-  enabled = device_is_tablet_touchpad (input_settings, device) ||
-    g_settings_get_boolean (priv->touchpad_settings, "tap-and-drag");
+  enabled = (device && device_is_tablet_touchpad (input_settings, device)) ||
+            g_settings_get_boolean (priv->touchpad_settings, "tap-and-drag");
 
   if (device)
     {
@@ -2117,7 +2117,8 @@ meta_input_settings_get_tablet_wacom_device (MetaInputSettings *settings,
 
   priv = meta_input_settings_get_instance_private (settings);
   info = g_hash_table_lookup (priv->mappable_devices, device);
-  g_return_val_if_fail (info != NULL, NULL);
+  if (!info)
+    return NULL;
 
   return info->wacom_device;
 }
