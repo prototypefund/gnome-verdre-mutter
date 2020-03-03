@@ -1426,12 +1426,12 @@ _clutter_stage_check_updated_pointers (ClutterStage *stage)
   ClutterBackend *backend;
   ClutterSeat *seat;
   GSList *updating = NULL;
-  GList *l, *devices;
+  const GList *l, *devices;
   graphene_point_t point;
 
   backend = clutter_get_default_backend ();
   seat = clutter_backend_get_default_seat (backend);
-  devices = clutter_seat_list_devices (seat);
+  devices = clutter_seat_peek_devices (seat);
 
   for (l = devices; l; l = l->next)
     {
@@ -1470,8 +1470,6 @@ _clutter_stage_check_updated_pointers (ClutterStage *stage)
           break;
         }
     }
-
-  g_list_free (devices);
 
   return updating;
 }

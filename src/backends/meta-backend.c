@@ -376,10 +376,10 @@ device_is_slave_touchscreen (ClutterInputDevice *device)
 static inline gboolean
 check_has_pointing_device (ClutterSeat *seat)
 {
-  GList *l, *devices;
+  const GList *l, *devices;
   gboolean found = FALSE;
 
-  devices = clutter_seat_list_devices (seat);
+  devices = clutter_seat_peek_devices (seat);
 
   for (l = devices; l; l = l->next)
     {
@@ -395,18 +395,16 @@ check_has_pointing_device (ClutterSeat *seat)
       break;
     }
 
-  g_list_free (devices);
-
   return found;
 }
 
 static inline gboolean
 check_has_slave_touchscreen (ClutterSeat *seat)
 {
-  GList *l, *devices;
+  const GList *l, *devices;
   gboolean found = FALSE;
 
-  devices = clutter_seat_list_devices (seat);
+  devices = clutter_seat_peek_devices (seat);
 
   for (l = devices; l; l = l->next)
     {
@@ -419,8 +417,6 @@ check_has_slave_touchscreen (ClutterSeat *seat)
           break;
         }
     }
-
-  g_list_free (devices);
 
   return found;
 }
@@ -468,20 +464,18 @@ static void
 create_device_monitors (MetaBackend *backend,
                         ClutterSeat *seat)
 {
-  GList *l, *devices;
+  const GList *l, *devices;
 
   create_device_monitor (backend, clutter_seat_get_pointer (seat));
   create_device_monitor (backend, clutter_seat_get_keyboard (seat));
 
-  devices = clutter_seat_list_devices (seat);
+  devices = clutter_seat_peek_devices (seat);
   for (l = devices; l; l = l->next)
     {
       ClutterInputDevice *device = l->data;
 
       meta_backend_monitor_device (backend, device);
     }
-
-  g_list_free (devices);
 }
 
 static void
@@ -489,10 +483,10 @@ set_initial_pointer_visibility (MetaBackend *backend,
                                 ClutterSeat *seat)
 {
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
-  GList *l, *devices;
+  const GList *l, *devices;
   gboolean has_touchscreen = FALSE;
 
-  devices = clutter_seat_list_devices (seat);
+  devices = clutter_seat_peek_devices (seat);
   for (l = devices; l; l = l->next)
     {
       ClutterInputDevice *device = l->data;
@@ -500,7 +494,6 @@ set_initial_pointer_visibility (MetaBackend *backend,
       has_touchscreen |= device_is_slave_touchscreen (device);
     }
 
-  g_list_free (devices);
   meta_cursor_tracker_set_pointer_visible (priv->cursor_tracker,
                                            !has_touchscreen);
 }

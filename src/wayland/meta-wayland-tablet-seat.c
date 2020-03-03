@@ -260,7 +260,7 @@ meta_wayland_tablet_seat_new (MetaWaylandTabletManager *manager,
                               MetaWaylandSeat          *seat)
 {
   MetaWaylandTabletSeat *tablet_seat;
-  GList *devices, *l;
+  const GList *devices, *l;
 
   tablet_seat = g_slice_new0 (MetaWaylandTabletSeat);
   tablet_seat->manager = manager;
@@ -281,12 +281,10 @@ meta_wayland_tablet_seat_new (MetaWaylandTabletManager *manager,
                             G_CALLBACK (meta_wayland_tablet_seat_device_removed),
                             tablet_seat);
 
-  devices = clutter_seat_list_devices (tablet_seat->clutter_seat);
+  devices = clutter_seat_peek_devices (tablet_seat->clutter_seat);
 
   for (l = devices; l; l = l->next)
     meta_wayland_tablet_seat_device_added (tablet_seat, l->data);
-
-  g_list_free (devices);
 
   return tablet_seat;
 }
@@ -479,11 +477,11 @@ lookup_grouped_devices (ClutterInputDevice     *device,
                         ClutterInputDeviceType  type)
 {
   ClutterSeat *clutter_seat;
-  GList *devices, *l;
+  const GList *devices, *l;
   GList *group = NULL;
 
   clutter_seat = clutter_input_device_get_seat (device);
-  devices = clutter_seat_list_devices (clutter_seat);
+  devices = clutter_seat_peek_devices (clutter_seat);
 
   for (l = devices; l; l = l->next)
     {
@@ -497,8 +495,6 @@ lookup_grouped_devices (ClutterInputDevice     *device,
 
       group = g_list_prepend (group, l->data);
     }
-
-  g_list_free (devices);
 
   return group;
 }

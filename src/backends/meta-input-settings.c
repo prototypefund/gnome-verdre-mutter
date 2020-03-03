@@ -127,11 +127,11 @@ meta_input_settings_get_devices (MetaInputSettings      *settings,
                                  ClutterInputDeviceType  type)
 {
   MetaInputSettingsPrivate *priv;
-  GList *l, *devices;
+  const GList *l, *devices;
   GSList *list = NULL;
 
   priv = meta_input_settings_get_instance_private (settings);
-  devices = clutter_seat_list_devices (priv->seat);
+  devices = clutter_seat_peek_devices (priv->seat);
 
   for (l = devices; l; l = l->next)
     {
@@ -141,8 +141,6 @@ meta_input_settings_get_devices (MetaInputSettings      *settings,
           clutter_input_device_get_device_mode (device) != CLUTTER_INPUT_MODE_MASTER)
         list = g_slist_prepend (list, device);
     }
-
-  g_list_free (devices);
 
   return list;
 }
@@ -382,9 +380,9 @@ update_pointer_accel_profile (MetaInputSettings  *input_settings,
     {
       MetaInputSettingsPrivate *priv =
         meta_input_settings_get_instance_private (input_settings);
-      GList *l, *devices;
+      const GList *l, *devices;
 
-      devices = clutter_seat_list_devices (priv->seat);
+      devices = clutter_seat_peek_devices (priv->seat);
       for (l = devices; l; l = l->next)
         {
           device = l->data;
@@ -396,8 +394,6 @@ update_pointer_accel_profile (MetaInputSettings  *input_settings,
           do_update_pointer_accel_profile (input_settings, settings,
                                            device, profile);
         }
-
-      g_list_free (devices);
     }
 }
 
@@ -812,9 +808,9 @@ update_trackball_scroll_button (MetaInputSettings  *input_settings,
     }
   else if (!device)
     {
-      GList *l, *devices;
+      const GList *l, *devices;
 
-      devices = clutter_seat_list_devices (priv->seat);
+      devices = clutter_seat_peek_devices (priv->seat);
 
       for (l = devices; l; l = l->next)
         {
@@ -823,8 +819,6 @@ update_trackball_scroll_button (MetaInputSettings  *input_settings,
           if (input_settings_class->is_trackball_device (input_settings, device))
             input_settings_class->set_scroll_button (input_settings, device, button);
         }
-
-      g_list_free (devices);
     }
 }
 
@@ -1903,10 +1897,10 @@ static void
 check_mappable_devices (MetaInputSettings *input_settings)
 {
   MetaInputSettingsPrivate *priv;
-  GList *l, *devices;
+  const GList *l, *devices;
 
   priv = meta_input_settings_get_instance_private (input_settings);
-  devices = clutter_seat_list_devices (priv->seat);
+  devices = clutter_seat_peek_devices (priv->seat);
 
   for (l = devices; l; l = l->next)
     {
@@ -1917,8 +1911,6 @@ check_mappable_devices (MetaInputSettings *input_settings)
 
       check_add_mappable_device (input_settings, device);
     }
-
-  g_list_free (devices);
 }
 
 static void

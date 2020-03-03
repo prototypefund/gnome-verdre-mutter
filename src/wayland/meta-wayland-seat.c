@@ -101,10 +101,10 @@ bind_seat (struct wl_client *client,
 static uint32_t
 lookup_device_capabilities (ClutterSeat *seat)
 {
-  GList *devices, *l;
+  const GList *devices, *l;
   uint32_t capabilities = 0;
 
-  devices = clutter_seat_list_devices (seat);
+  devices = clutter_seat_peek_devices (seat);
 
   for (l = devices; l; l = l->next)
     {
@@ -138,8 +138,6 @@ lookup_device_capabilities (ClutterSeat *seat)
           break;
         }
     }
-
-  g_list_free (devices);
 
   return capabilities;
 }
