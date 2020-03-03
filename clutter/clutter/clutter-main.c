@@ -2059,7 +2059,8 @@ _clutter_process_event_details (ClutterActor        *stage,
 
                   emit_touch_event (event, device);
 
-                  if (event->type == CLUTTER_TOUCH_END)
+                  if (event->type == CLUTTER_TOUCH_END ||
+                      event->type == CLUTTER_TOUCH_CANCEL)
                     _clutter_input_device_remove_event_sequence (device, sequence);
 
                   break;
@@ -2094,7 +2095,8 @@ _clutter_process_event_details (ClutterActor        *stage,
 
           emit_touch_event (event, device);
 
-          if (event->type == CLUTTER_TOUCH_END)
+          if (event->type == CLUTTER_TOUCH_END ||
+              event->type == CLUTTER_TOUCH_CANCEL)
             _clutter_input_device_remove_event_sequence (device, sequence);
 
           break;
