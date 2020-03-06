@@ -581,7 +581,6 @@ clutter_stage_cogl_redraw_view (ClutterStageWindow *stage_window,
   CoglFramebuffer *fb = clutter_stage_view_get_framebuffer (view);
   cairo_rectangle_int_t view_rect;
   gboolean is_full_redraw;
-  gboolean may_use_clipped_redraw;
   gboolean use_clipped_redraw;
   gboolean can_blit_sub_buffer;
   gboolean has_buffer_age;
@@ -614,16 +613,17 @@ clutter_stage_cogl_redraw_view (ClutterStageWindow *stage_window,
   else
     is_full_redraw = FALSE;
 
-  may_use_clipped_redraw = FALSE;
-  if (_clutter_stage_window_can_clip_redraws (stage_window) &&
-      (can_blit_sub_buffer || has_buffer_age) &&
-      !is_full_redraw &&
-      /* some drivers struggle to get going and produce some junk
-       * frames when starting up... */
-      cogl_onscreen_get_frame_counter (COGL_ONSCREEN (fb)) > 3)
-    {
-      may_use_clipped_redraw = TRUE;
+  use_clipped_redraw =
+    !(clutter_paint_debug_flags & CLUTTER_DEBUG_DISABLE_CLIPPED_REDRAWS) &&
+    _clutter_stage_window_can_clip_redraws (stage_window) &&
+    (can_blit_sub_buffer || has_buffer_age) &&
+    !is_full_redraw &&
+    /* some drivers struggle to get going and produce some junk
+     * frames when starting up... */
+    cogl_onscreen_get_frame_counter (COGL_ONSCREEN (fb)) > 3;
 
+  if (use_clipped_redraw)
+    {
       fb_clip_region = offset_scale_and_clamp_region (redraw_clip,
                                                       -view_rect.x,
                                                       -view_rect.y,
@@ -645,13 +645,7 @@ clutter_stage_cogl_redraw_view (ClutterStageWindow *stage_window,
 
   queued_redraw_clip = cairo_region_copy (redraw_clip);
 
-  if (may_use_clipped_redraw &&
-      G_LIKELY (!(clutter_paint_debug_flags & CLUTTER_DEBUG_DISABLE_CLIPPED_REDRAWS)))
-    use_clipped_redraw = TRUE;
-  else
-    use_clipped_redraw = FALSE;
-
-  clip_region_empty = may_use_clipped_redraw && cairo_region_is_empty (fb_clip_region);
+  clip_region_empty = use_clipped_redraw && cairo_region_is_empty (fb_clip_region);
 
   swap_with_damage = FALSE;
   if (has_buffer_age)
