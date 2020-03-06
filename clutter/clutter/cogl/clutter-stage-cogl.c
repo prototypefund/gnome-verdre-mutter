@@ -587,6 +587,7 @@ clutter_stage_cogl_redraw_view (ClutterStageWindow *stage_window,
   cairo_region_t *swap_region;
   float fb_scale;
   int fb_width, fb_height;
+  int buffer_age;
 
   clutter_stage_view_get_layout (view, &view_rect);
   fb_scale = clutter_stage_view_get_scale (view);
@@ -618,6 +619,16 @@ clutter_stage_cogl_redraw_view (ClutterStageWindow *stage_window,
      * frames when starting up... */
     cogl_onscreen_get_frame_counter (COGL_ONSCREEN (fb)) > 3;
 
+  if (has_buffer_age)
+    {
+      buffer_age = cogl_onscreen_get_buffer_age (COGL_ONSCREEN (fb));
+      if (!valid_buffer_age (view_cogl, buffer_age))
+        {
+          CLUTTER_NOTE (CLIPPING, "Invalid back buffer(age=%d): forcing full redraw\n", buffer_age);
+          use_clipped_redraw = FALSE;
+        }
+    }
+
   if (use_clipped_redraw)
     {
       fb_clip_region = offset_scale_and_clamp_region (redraw_clip,
@@ -646,66 +657,45 @@ clutter_stage_cogl_redraw_view (ClutterStageWindow *stage_window,
     {
       if (use_clipped_redraw)
         {
-          int age;
+          cairo_region_t *fb_damage;
+          cairo_region_t *view_damage;
+          int i;
 
-          age = cogl_onscreen_get_buffer_age (COGL_ONSCREEN (fb));
+          fill_current_damage_history (view, fb_clip_region);
 
-          if (valid_buffer_age (view_cogl, age))
+          fb_damage = cairo_region_create ();
+
+          for (i = 1; i <= buffer_age; i++)
             {
-              cairo_region_t *fb_damage;
-              cairo_region_t *view_damage;
-              int i;
+              int damage_index;
 
-              fill_current_damage_history (view, fb_clip_region);
-
-              fb_damage = cairo_region_create ();
-
-              for (i = 1; i <= age; i++)
-                {
-                  int damage_index;
-
-                  damage_index = DAMAGE_HISTORY (view_priv->damage_index - i - 1);
-                  cairo_region_union (fb_damage,
-                                      view_priv->damage_history[damage_index]);
-                }
-
-              /* Update the fb clip region with the extra damage. */
-              cairo_region_union (fb_clip_region, fb_damage);
-
-              view_damage = offset_scale_and_clamp_region (fb_damage,
-                                                           0, 0,
-                                                           1.0f / fb_scale);
-              cairo_region_translate (view_damage, view_rect.x, view_rect.y);
-              cairo_region_intersect_rectangle (view_damage, &view_rect);
-
-              /* Update the redraw clip region with the extra damage. */
-              cairo_region_union (redraw_clip, view_damage);
-
-              cairo_region_destroy (view_damage);
-              cairo_region_destroy (fb_damage);
-
-              CLUTTER_NOTE (CLIPPING, "Reusing back buffer(age=%d) - repairing region: num rects: %d\n",
-                            age,
-                            cairo_region_num_rectangles (fb_clip_region));
-
-              swap_with_damage = TRUE;
+              damage_index = DAMAGE_HISTORY (view_priv->damage_index - i - 1);
+              cairo_region_union (fb_damage,
+                                  view_priv->damage_history[damage_index]);
             }
-          else
-            {
-              cairo_rectangle_int_t fb_damage;
 
-              CLUTTER_NOTE (CLIPPING, "Invalid back buffer(age=%d): forcing full redraw\n", age);
-              use_clipped_redraw = FALSE;
-              fb_damage = (cairo_rectangle_int_t) {
-                .x = 0,
-                .y = 0,
-                .width = ceilf (view_rect.width * fb_scale),
-                .height = ceilf (view_rect.height * fb_scale)
-              };
-              fill_current_damage_history_rectangle (view, &fb_damage);
-            }
+          /* Update the fb clip region with the extra damage. */
+          cairo_region_union (fb_clip_region, fb_damage);
+
+          view_damage = offset_scale_and_clamp_region (fb_damage,
+                                                       0, 0,
+                                                       1.0f / fb_scale);
+          cairo_region_translate (view_damage, view_rect.x, view_rect.y);
+          cairo_region_intersect_rectangle (view_damage, &view_rect);
+
+          /* Update the redraw clip region with the extra damage. */
+          cairo_region_union (redraw_clip, view_damage);
+
+          cairo_region_destroy (view_damage);
+          cairo_region_destroy (fb_damage);
+
+          CLUTTER_NOTE (CLIPPING, "Reusing back buffer(age=%d) - repairing region: num rects: %d\n",
+                        buffer_age,
+                        cairo_region_num_rectangles (fb_clip_region));
+
+          swap_with_damage = TRUE;
         }
-      else if (!use_clipped_redraw)
+      else
         {
           cairo_rectangle_int_t fb_damage;
 
