@@ -309,7 +309,7 @@ paint_damage_region (ClutterStageWindow *stage_window,
                      cairo_region_t     *swap_region,
                      cairo_region_t     *queued_redraw_clip)
 {
-  CoglFramebuffer *framebuffer = clutter_stage_view_get_onscreen (view);
+  CoglFramebuffer *framebuffer = clutter_stage_view_get_framebuffer (view);
   CoglContext *ctx = cogl_framebuffer_get_context (framebuffer);
   static CoglPipeline *overlay_blue = NULL;
   ClutterStageCogl *stage_cogl = CLUTTER_STAGE_COGL (stage_window);
@@ -776,14 +776,6 @@ clutter_stage_cogl_redraw_view (ClutterStageWindow *stage_window,
         transform_swap_region_to_onscreen (view, swap_region);
       cairo_region_destroy (swap_region);
       swap_region = transformed_swap_region;
-
-      if (clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_DAMAGE_REGION)
-        {
-          transformed_swap_region =
-            transform_swap_region_to_onscreen (view, debug_swap_region);
-          cairo_region_destroy (debug_swap_region);
-          debug_swap_region = transformed_swap_region;
-        }
     }
 
   if (G_UNLIKELY ((clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_DAMAGE_REGION)))
