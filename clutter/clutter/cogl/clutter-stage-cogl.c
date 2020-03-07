@@ -787,7 +787,18 @@ clutter_stage_cogl_redraw_view (ClutterStageWindow *stage_window,
     }
 
   if (G_UNLIKELY ((clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_DAMAGE_REGION)))
-    paint_damage_region (stage_window, view, debug_swap_region, queued_redraw_clip);
+    {
+      cairo_region_t *scaled_swap_region;
+
+      scaled_swap_region = scale_offset_and_clamp_region (debug_swap_region,
+                                                          1.0f / fb_scale,
+                                                          view_rect.x,
+                                                          view_rect.y);
+
+      paint_damage_region (stage_window, view, scaled_swap_region, queued_redraw_clip);
+
+      cairo_region_destroy (scaled_swap_region);
+    }
 
   g_clear_pointer (&queued_redraw_clip, cairo_region_destroy);
   g_clear_pointer (&debug_swap_region, cairo_region_destroy);
