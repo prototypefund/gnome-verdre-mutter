@@ -582,15 +582,6 @@ transform_swap_region_to_onscreen (ClutterStageView *view,
   return transformed_region;
 }
 
-static inline gboolean
-is_buffer_age_enabled (void)
-{
-  /* Buffer age is disabled when running with CLUTTER_PAINT=damage-region,
-   * to ensure the red damage represents the currently damaged area */
-  return !(clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_DAMAGE_REGION) &&
-         cogl_clutter_winsys_has_feature (COGL_WINSYS_FEATURE_BUFFER_AGE);
-}
-
 static gboolean
 clutter_stage_cogl_redraw_view (ClutterStageWindow *stage_window,
                                 ClutterStageView   *view)
@@ -610,6 +601,7 @@ clutter_stage_cogl_redraw_view (ClutterStageWindow *stage_window,
   cairo_region_t *queued_redraw_clip = NULL;
   cairo_region_t *fb_clip_region;
   cairo_region_t *swap_region;
+  cairo_region_t *debug_swap_region = NULL;
   float fb_scale;
   int fb_width, fb_height;
   int buffer_age;
@@ -623,7 +615,9 @@ clutter_stage_cogl_redraw_view (ClutterStageWindow *stage_window,
     cogl_is_onscreen (fb) &&
     cogl_clutter_winsys_has_feature (COGL_WINSYS_FEATURE_SWAP_REGION);
 
-  has_buffer_age = cogl_is_onscreen (fb) && is_buffer_age_enabled ();
+  has_buffer_age =
+    cogl_is_onscreen (fb) &&
+    cogl_clutter_winsys_has_feature (COGL_WINSYS_FEATURE_BUFFER_AGE);
 
   redraw_clip = clutter_stage_view_take_redraw_clip (view);
   if (clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_DAMAGE_REGION)
@@ -721,6 +715,22 @@ clutter_stage_cogl_redraw_view (ClutterStageWindow *stage_window,
         }
     }
 
+  if (clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_DAMAGE_REGION)
+    {
+      if (use_clipped_redraw)
+        {
+          debug_swap_region = cairo_region_copy (fb_clip_region);
+          redraw_clip = cairo_region_create_rectangle (&view_rect);
+        }
+      else
+        {
+          debug_swap_region = cairo_region_create ();
+        }
+
+      swap_with_damage = FALSE;
+      use_clipped_redraw = FALSE;
+    }
+
   if (use_clipped_redraw)
     {
       cogl_framebuffer_push_region_clip (fb, fb_clip_region);
@@ -766,12 +776,21 @@ clutter_stage_cogl_redraw_view (ClutterStageWindow *stage_window,
         transform_swap_region_to_onscreen (view, swap_region);
       cairo_region_destroy (swap_region);
       swap_region = transformed_swap_region;
+
+      if (clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_DAMAGE_REGION)
+        {
+          transformed_swap_region =
+            transform_swap_region_to_onscreen (view, debug_swap_region);
+          cairo_region_destroy (debug_swap_region);
+          debug_swap_region = transformed_swap_region;
+        }
     }
 
   if (G_UNLIKELY ((clutter_paint_debug_flags & CLUTTER_DEBUG_PAINT_DAMAGE_REGION)))
-    paint_damage_region (stage_window, view, swap_region, queued_redraw_clip);
+    paint_damage_region (stage_window, view, debug_swap_region, queued_redraw_clip);
 
   g_clear_pointer (&queued_redraw_clip, cairo_region_destroy);
+  g_clear_pointer (&debug_swap_region, cairo_region_destroy);
 
   res = swap_framebuffer (stage_window,
                           view,
