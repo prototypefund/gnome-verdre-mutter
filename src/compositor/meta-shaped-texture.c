@@ -547,7 +547,9 @@ do_paint_content (MetaShapedTexture   *stex,
   framebuffer = clutter_paint_node_get_framebuffer (root_node);
   if (!framebuffer)
     framebuffer = clutter_paint_context_get_framebuffer (paint_context);
-  if (meta_actor_painting_untransformed (framebuffer,
+  if (cogl_texture_get_width (paint_tex) == dst_width &&
+      cogl_texture_get_height (paint_tex) == dst_height &&
+      meta_actor_painting_untransformed (framebuffer,
                                          dst_width, dst_height,
                                          NULL, NULL))
     filter = COGL_PIPELINE_FILTER_NEAREST;
