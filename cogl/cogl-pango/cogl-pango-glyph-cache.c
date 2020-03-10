@@ -334,8 +334,8 @@ cogl_pango_glyph_cache_lookup (CoglPangoGlyphCache *cache,
 
       value->draw_x = ink_rect.x;
       value->draw_y = ink_rect.y;
-      value->draw_width = ink_rect.width;
-      value->draw_height = ink_rect.height;
+      value->draw_width = ink_rect.width + 1;
+      value->draw_height = ink_rect.height + 1;
 
       /* If the glyph is zero-sized then we don't need to reserve any
          space for it and we can just avoid painting anything */
