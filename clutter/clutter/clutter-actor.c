@@ -17666,62 +17666,43 @@ clutter_actor_get_paint_box (ClutterActor    *self,
 }
 
 static gboolean
-_clutter_actor_get_resource_scale_for_rect (ClutterActor    *self,
-                                            graphene_rect_t *bounding_rect,
-                                            float           *resource_scale)
+_clutter_actor_compute_resource_scale (ClutterActor *self,
+                                       float        *resource_scale)
 {
-  ClutterActor *stage;
-  float max_scale = 0;
+  ClutterActor *actor, *stage;
 
   stage = _clutter_actor_get_stage_internal (self);
   if (!stage)
     return FALSE;
 
-  if (!_clutter_stage_get_max_view_scale_factor_for_rect (CLUTTER_STAGE (stage),
-                                                          bounding_rect,
-                                                          &max_scale))
-    return FALSE;
-
-  *resource_scale = max_scale;
-
-  return TRUE;
-}
-
-static gboolean
-_clutter_actor_compute_resource_scale (ClutterActor *self,
-                                       float        *resource_scale)
-{
-  graphene_rect_t bounding_rect;
-  ClutterActorPrivate *priv = self->priv;
-
-  if (CLUTTER_ACTOR_IN_DESTRUCTION (self) ||
-      CLUTTER_ACTOR_IN_PREF_SIZE (self) ||
-      !clutter_actor_is_mapped (self))
+  for (actor = self; actor != NULL; actor = actor->priv->parent)
     {
-      return FALSE;
-    }
+      graphene_rect_t bounding_rect;
 
-  clutter_actor_get_transformed_position (self,
-                                          &bounding_rect.origin.x,
-                                          &bounding_rect.origin.y);
-  clutter_actor_get_transformed_size (self,
-                                      &bounding_rect.size.width,
-                                      &bounding_rect.size.height);
-
-  if (bounding_rect.size.width == 0.0 ||
-      bounding_rect.size.height == 0.0 ||
-      !_clutter_actor_get_resource_scale_for_rect (self,
-                                                   &bounding_rect,
-                                                   resource_scale))
-    {
-      if (priv->parent)
-        return _clutter_actor_compute_resource_scale (priv->parent,
-                                                      resource_scale);
-      else
+      if (CLUTTER_ACTOR_IN_DESTRUCTION (actor) ||
+          CLUTTER_ACTOR_IN_PREF_SIZE (actor) ||
+          !clutter_actor_is_mapped (actor))
         return FALSE;
+
+      clutter_actor_get_transformed_position (actor,
+                                              &bounding_rect.origin.x,
+                                              &bounding_rect.origin.y);
+
+      clutter_actor_get_transformed_size (actor,
+                                          &bounding_rect.size.width,
+                                          &bounding_rect.size.height);
+
+      if (bounding_rect.size.width == 0.0 ||
+          bounding_rect.size.height == 0.0)
+        continue;
+
+      if (_clutter_stage_get_max_view_scale_factor_for_rect (CLUTTER_STAGE (stage),
+                                                             &bounding_rect,
+                                                             resource_scale))
+        return TRUE;
     }
 
-  return TRUE;
+  return FALSE;
 }
 
 static ClutterActorTraverseVisitFlags
