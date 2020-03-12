@@ -1644,8 +1644,6 @@ clutter_actor_real_map (ClutterActor *self)
 
   self->priv->needs_paint_volume_update = TRUE;
 
-  clutter_actor_ensure_resource_scale (self);
-
   /* notify on parent mapped before potentially mapping
    * children, so apps see a top-down notification.
    */
