@@ -232,7 +232,7 @@ clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
   ClutterOffscreenEffectPrivate *priv = self->priv;
   ClutterActorBox raw_box, box;
   ClutterActor *stage;
-  CoglMatrix projection, old_modelview, modelview;
+  CoglMatrix projection, old_modelview, modelview, modelview_projection;
   const ClutterPaintVolume *volume;
   CoglColor transparent;
   gfloat stage_width, stage_height;
@@ -335,8 +335,8 @@ clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
    * It doesn't appear anyone actually uses this yet, but get_target_rect is
    * documented as returning it. So we should...
    */
-  _clutter_util_fully_transform_vertices (&old_modelview,
-                                          &projection,
+  cogl_matrix_multiply (&modelview_projection, &projection, &old_modelview);
+  _clutter_util_fully_transform_vertices (&modelview_projection,
                                           old_viewport,
                                           &local_offset,
                                           &priv->position,

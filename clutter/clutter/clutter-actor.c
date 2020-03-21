@@ -2882,7 +2882,6 @@ _clutter_actor_fully_transform_vertices (ClutterActor             *self,
 {
   ClutterActor *stage;
   CoglMatrix *modelview_projection;
-  CoglMatrix projection;
   float viewport[4];
 
   g_return_val_if_fail (CLUTTER_IS_ACTOR (self), FALSE);
@@ -2897,7 +2896,6 @@ _clutter_actor_fully_transform_vertices (ClutterActor             *self,
   modelview_projection = clutter_actor_get_absolute_modelview_projection (self);
 
   /* Fetch the projection and viewport */
-  clutter_matrix_init_identity (&projection);
   _clutter_stage_get_viewport (CLUTTER_STAGE (stage),
                                &viewport[0],
                                &viewport[1],
@@ -2905,7 +2903,6 @@ _clutter_actor_fully_transform_vertices (ClutterActor             *self,
                                &viewport[3]);
 
   _clutter_util_fully_transform_vertices (modelview_projection,
-                                          &projection,
                                           viewport,
                                           vertices_in,
                                           vertices_out,

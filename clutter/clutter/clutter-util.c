@@ -48,51 +48,24 @@
 #define MTX_GL_SCALE_Z(z,w,v1,v2) (MTX_GL_SCALE_X ((z), (w), (v1), (v2)))
 
 void
-_clutter_util_fully_transform_vertices (const CoglMatrix *modelview,
-                                        const CoglMatrix *projection,
+_clutter_util_fully_transform_vertices (const CoglMatrix *modelview_projection,
                                         const float *viewport,
                                         const graphene_point3d_t *vertices_in,
                                         graphene_point3d_t *vertices_out,
                                         int n_vertices)
 {
-  CoglMatrix modelview_projection;
   ClutterVertex4 *vertices_tmp;
   int i;
 
   vertices_tmp = g_alloca (sizeof (ClutterVertex4) * n_vertices);
 
-  if (n_vertices >= 4)
-    {
-      /* XXX: we should find a way to cache this per actor */
-      cogl_matrix_multiply (&modelview_projection,
-                            projection,
-                            modelview);
-      cogl_matrix_project_points (&modelview_projection,
-                                  3,
-                                  sizeof (graphene_point3d_t),
-                                  vertices_in,
-                                  sizeof (ClutterVertex4),
-                                  vertices_tmp,
-                                  n_vertices);
-    }
-  else
-    {
-      cogl_matrix_transform_points (modelview,
-                                    3,
-                                    sizeof (graphene_point3d_t),
-                                    vertices_in,
-                                    sizeof (ClutterVertex4),
-                                    vertices_tmp,
-                                    n_vertices);
-
-      cogl_matrix_project_points (projection,
-                                  3,
-                                  sizeof (ClutterVertex4),
-                                  vertices_tmp,
-                                  sizeof (ClutterVertex4),
-                                  vertices_tmp,
-                                  n_vertices);
-    }
+  cogl_matrix_project_points (modelview_projection,
+                              3,
+                              sizeof (graphene_point3d_t),
+                              vertices_in,
+                              sizeof (ClutterVertex4),
+                              vertices_tmp,
+                              n_vertices);
 
   for (i = 0; i < n_vertices; i++)
     {
