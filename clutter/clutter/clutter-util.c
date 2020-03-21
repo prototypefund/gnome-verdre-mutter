@@ -56,50 +56,24 @@ typedef struct
 } ClutterVertex4;
 
 void
-_clutter_util_fully_transform_vertices (const graphene_matrix_t  *modelview,
-                                        const graphene_matrix_t  *projection,
+_clutter_util_fully_transform_vertices (const graphene_matrix_t  *modelview_projection,
                                         const float              *viewport,
                                         const graphene_point3d_t *vertices_in,
                                         graphene_point3d_t       *vertices_out,
                                         int                       n_vertices)
 {
-  graphene_matrix_t modelview_projection;
   ClutterVertex4 *vertices_tmp;
   int i;
 
   vertices_tmp = g_alloca (sizeof (ClutterVertex4) * n_vertices);
 
-  if (n_vertices >= 4)
-    {
-      /* XXX: we should find a way to cache this per actor */
-      graphene_matrix_multiply (modelview, projection, &modelview_projection);
-
-      cogl_graphene_matrix_project_points (&modelview_projection,
-                                           3,
-                                           sizeof (graphene_point3d_t),
-                                           vertices_in,
-                                           sizeof (ClutterVertex4),
-                                           vertices_tmp,
-                                           n_vertices);
-    }
-  else
-    {
-      cogl_graphene_matrix_transform_points (modelview,
-                                             3,
-                                             sizeof (graphene_point3d_t),
-                                             vertices_in,
-                                             sizeof (ClutterVertex4),
-                                             vertices_tmp,
-                                             n_vertices);
-
-      cogl_graphene_matrix_project_points (projection,
-                                           3,
-                                           sizeof (ClutterVertex4),
-                                           vertices_tmp,
-                                           sizeof (ClutterVertex4),
-                                           vertices_tmp,
-                                           n_vertices);
-    }
+  cogl_graphene_matrix_project_points (modelview_projection,
+                                       3,
+                                       sizeof (graphene_point3d_t),
+                                       vertices_in,
+                                       sizeof (ClutterVertex4),
+                                       vertices_tmp,
+                                       n_vertices);
 
   for (i = 0; i < n_vertices; i++)
     {

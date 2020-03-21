@@ -738,8 +738,7 @@ _clutter_paint_volume_get_bounding_box (ClutterPaintVolume *pv,
 
 void
 _clutter_paint_volume_project (ClutterPaintVolume *pv,
-                               const graphene_matrix_t *modelview,
-                               const graphene_matrix_t *projection,
+                               const graphene_matrix_t *modelview_projection,
                                const float *viewport)
 {
   int transform_count;
@@ -747,8 +746,7 @@ _clutter_paint_volume_project (ClutterPaintVolume *pv,
   if (pv->is_empty)
     {
       /* Just transform the origin... */
-      _clutter_util_fully_transform_vertices (modelview,
-                                              projection,
+      _clutter_util_fully_transform_vertices (modelview_projection,
                                               viewport,
                                               pv->vertices,
                                               pv->vertices,
@@ -767,8 +765,7 @@ _clutter_paint_volume_project (ClutterPaintVolume *pv,
   else
     transform_count = 8;
 
-  _clutter_util_fully_transform_vertices (modelview,
-                                          projection,
+  _clutter_util_fully_transform_vertices (modelview_projection,
                                           viewport,
                                           pv->vertices,
                                           pv->vertices,
@@ -1035,7 +1032,7 @@ _clutter_paint_volume_get_stage_paint_box (ClutterPaintVolume *pv,
 {
   ClutterPaintVolume projected_pv;
   graphene_matrix_t *modelview_projection;
-  graphene_matrix_t stage_projection, projection;
+  graphene_matrix_t stage_projection;
   float viewport[4];
 
   _clutter_paint_volume_copy_static (pv, &projected_pv);
@@ -1052,7 +1049,6 @@ _clutter_paint_volume_get_stage_paint_box (ClutterPaintVolume *pv,
       modelview_projection = &stage_projection;
     }
 
-  graphene_matrix_init_identity (&projection);
   _clutter_stage_get_viewport (stage,
                                &viewport[0],
                                &viewport[1],
@@ -1061,7 +1057,6 @@ _clutter_paint_volume_get_stage_paint_box (ClutterPaintVolume *pv,
 
   _clutter_paint_volume_project (&projected_pv,
                                  modelview_projection,
-                                 &projection,
                                  viewport);
 
   _clutter_paint_volume_get_bounding_box (&projected_pv, box);

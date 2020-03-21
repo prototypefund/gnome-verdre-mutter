@@ -2804,8 +2804,7 @@ _clutter_actor_fully_transform_vertices (ClutterActor             *self,
                                          int                       n_vertices)
 {
   ClutterActor *stage;
-  graphene_matrix_t modelview;
-  graphene_matrix_t projection;
+  graphene_matrix_t *modelview_projection;
   float viewport[4];
 
   g_return_val_if_fail (CLUTTER_IS_ACTOR (self), FALSE);
@@ -2817,21 +2816,16 @@ _clutter_actor_fully_transform_vertices (ClutterActor             *self,
   if (stage == NULL)
     return FALSE;
 
-  /* Note: we pass NULL as the ancestor because we don't just want the modelview
-   * that gets us to stage coordinates, we want to go all the way to eye
-   * coordinates */
-  _clutter_actor_get_relative_transformation_matrix (self, NULL, &modelview);
+  modelview_projection = clutter_actor_get_absolute_modelview_projection (self);
 
   /* Fetch the projection and viewport */
-  _clutter_stage_get_projection_matrix (CLUTTER_STAGE (stage), &projection);
   _clutter_stage_get_viewport (CLUTTER_STAGE (stage),
                                &viewport[0],
                                &viewport[1],
                                &viewport[2],
                                &viewport[3]);
 
-  _clutter_util_fully_transform_vertices (&modelview,
-                                          &projection,
+  _clutter_util_fully_transform_vertices (modelview_projection,
                                           viewport,
                                           vertices_in,
                                           vertices_out,

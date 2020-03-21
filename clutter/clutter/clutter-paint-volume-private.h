@@ -114,8 +114,7 @@ void                _clutter_paint_volume_complete             (ClutterPaintVolu
 void                _clutter_paint_volume_transform            (ClutterPaintVolume      *pv,
                                                                 const graphene_matrix_t *matrix);
 void                _clutter_paint_volume_project              (ClutterPaintVolume      *pv,
-                                                                const graphene_matrix_t *modelview,
-                                                                const graphene_matrix_t *projection,
+                                                                const graphene_matrix_t *modelview_projection,
                                                                 const float             *viewport);
 void                _clutter_paint_volume_get_bounding_box     (ClutterPaintVolume *pv,
                                                                 ClutterActorBox    *box);
