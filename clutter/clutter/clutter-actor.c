@@ -689,6 +689,9 @@ struct _ClutterActorPrivate
   /* the cached transformation matrix; see apply_transform() */
   graphene_matrix_t transform;
 
+  /* the cached matrix including modelview and projection up to the stage */
+  graphene_matrix_t absolute_modelview_projection;
+
   float resource_scale;
 
   guint8 opacity;
@@ -845,6 +848,8 @@ struct _ClutterActorPrivate
   guint had_effects_on_last_paint_volume_update : 1;
   guint needs_update_stage_views    : 1;
   guint clear_stage_views_needs_stage_views_changed : 1;
+  guint has_inverse_transform       : 1;
+  guint absolute_modelview_projection_valid : 1;
 };
 
 enum
@@ -2501,6 +2506,7 @@ clutter_actor_notify_if_geometry_changed (ClutterActor          *self,
 static void
 absolute_geometry_changed (ClutterActor *actor)
 {
+  actor->priv->absolute_modelview_projection_valid = FALSE;
   queue_update_stage_views (actor);
 }
 
@@ -2881,8 +2887,6 @@ clutter_actor_apply_transform_to_point (ClutterActor             *self,
  * instead.
  *
  */
-/* XXX: We should consider caching the stage relative modelview along with
- * the actor itself */
 static void
 _clutter_actor_get_relative_transformation_matrix (ClutterActor      *self,
                                                    ClutterActor      *ancestor,
@@ -3128,6 +3132,41 @@ _clutter_actor_apply_relative_transformation_matrix (ClutterActor      *self,
                                                          matrix);
 
   _clutter_actor_apply_modelview_transform (self, matrix);
+}
+
+graphene_matrix_t *
+clutter_actor_get_absolute_modelview_projection (ClutterActor *self)
+{
+  ClutterActorPrivate *priv = self->priv;
+
+  if (priv->absolute_modelview_projection_valid)
+    return &priv->absolute_modelview_projection;
+
+  graphene_matrix_init_identity (&priv->absolute_modelview_projection);
+
+  if (priv->parent == NULL)
+    {
+      /* No parents, this must be the stage... */
+      ClutterStage *stage = CLUTTER_STAGE (self);
+      graphene_matrix_t projection;
+
+      _clutter_stage_get_projection_matrix (stage, &projection);
+      graphene_matrix_multiply (&priv->absolute_modelview_projection,
+                                &projection,
+                                &priv->absolute_modelview_projection);
+    }
+  else
+    {
+      graphene_matrix_multiply (&priv->absolute_modelview_projection,
+                                clutter_actor_get_absolute_modelview_projection (priv->parent),
+                                &priv->absolute_modelview_projection);
+    }
+
+  _clutter_actor_apply_modelview_transform (self,
+                                            &priv->absolute_modelview_projection);
+
+  priv->absolute_modelview_projection_valid = TRUE;
+  return &priv->absolute_modelview_projection;
 }
 
 static void
@@ -3800,10 +3839,6 @@ clutter_actor_paint (ClutterActor        *self,
    * the paint volume or use it to cull painting, since the paint
    * box represents the location of the source actor on the
    * screen.
-   *
-   * XXX: We are starting to do a lot of vertex transforms on
-   * the CPU in a typical paint, so at some point we should
-   * audit these and consider caching some things.
    *
    * NB: We don't perform culling while picking at this point because
    * clutter-stage.c doesn't setup the clipping planes appropriately.
@@ -7746,6 +7781,7 @@ clutter_actor_init (ClutterActor *self)
   priv->last_paint_volume_valid = TRUE;
 
   priv->transform_valid = FALSE;
+  priv->absolute_modelview_projection_valid = FALSE;
 
   /* the default is to stretch the content, to match the
    * current behaviour of basically all actors. also, it's
