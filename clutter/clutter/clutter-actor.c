@@ -704,6 +704,9 @@ struct _ClutterActorPrivate
   /* the cached transformation matrix; see apply_transform() */
   CoglMatrix transform;
 
+  /* the cached matrix including modelview and projection up to the stage */
+  CoglMatrix absolute_modelview_projection;
+
   float resource_scale;
 
   guint8 opacity;
@@ -856,6 +859,7 @@ struct _ClutterActorPrivate
   guint had_effects_on_last_paint_volume_update : 1;
   guint absolute_origin_changed     : 1;
   guint needs_update_stage_views    : 1;
+  guint absolute_modelview_projection_valid : 1;
 };
 
 enum
@@ -2525,6 +2529,7 @@ clutter_actor_notify_if_geometry_changed (ClutterActor          *self,
 static void
 absolute_allocation_changed (ClutterActor *actor)
 {
+  actor->priv->absolute_modelview_projection_valid = FALSE;
   queue_update_stage_views (actor);
 }
 
@@ -2538,10 +2543,26 @@ absolute_allocation_changed_cb (ClutterActor *actor,
   return CLUTTER_ACTOR_TRAVERSE_VISIT_CONTINUE;
 }
 
+static ClutterActorTraverseVisitFlags
+invalidate_absolute_modelview_projection_cb (ClutterActor *actor,
+                                             int           depth,
+                                             gpointer      user_data)
+{
+  actor->priv->absolute_modelview_projection_valid = FALSE;
+
+  return CLUTTER_ACTOR_TRAVERSE_VISIT_CONTINUE;
+}
+
 static void
 transform_changed (ClutterActor *actor)
 {
   actor->priv->transform_valid = FALSE;
+
+  _clutter_actor_traverse (actor,
+                           CLUTTER_ACTOR_TRAVERSE_DEPTH_FIRST,
+                           invalidate_absolute_modelview_projection_cb,
+                           NULL,
+                           NULL);
 }
 
 /*< private >
@@ -2566,7 +2587,7 @@ clutter_actor_set_allocation_internal (ClutterActor           *self,
 {
   ClutterActorPrivate *priv = self->priv;
   GObject *obj;
-  gboolean x1_changed, y1_changed, x2_changed, y2_changed;
+  gboolean origin_changed, size_changed;
   ClutterActorBox old_alloc = { 0, };
 
   g_return_if_fail (!isnan (box->x1) && !isnan (box->x2) &&
@@ -2578,10 +2599,10 @@ clutter_actor_set_allocation_internal (ClutterActor           *self,
 
   clutter_actor_store_old_geometry (self, &old_alloc);
 
-  x1_changed = priv->allocation.x1 != box->x1;
-  y1_changed = priv->allocation.y1 != box->y1;
-  x2_changed = priv->allocation.x2 != box->x2;
-  y2_changed = priv->allocation.y2 != box->y2;
+  origin_changed = (priv->allocation.x1 != box->x1 ||
+                    priv->allocation.y1 != box->y1);
+  size_changed = (priv->allocation.x2 != box->x2 ||
+                  priv->allocation.y2 != box->y2);
 
   priv->allocation = *box;
 
@@ -2590,20 +2611,31 @@ clutter_actor_set_allocation_internal (ClutterActor           *self,
   priv->needs_height_request = FALSE;
   priv->needs_allocation = FALSE;
 
-  priv->absolute_origin_changed |= x1_changed || y1_changed;
+  priv->absolute_origin_changed |= origin_changed;
 
-  if (priv->absolute_origin_changed || x2_changed || y2_changed)
+  if (origin_changed || size_changed)
+    {
+      if (priv->absolute_origin_changed)
+        {
+          /* No need to invalidate the cached absolute modelview-projection
+           * matrices, the propagation of priv->absolute_origin_changed
+           * will take care of this.
+           */
+          priv->transform_valid = FALSE;
+        }
+      else
+        {
+          transform_changed (self);
+        }
+    }
+
+  if (priv->absolute_origin_changed || size_changed)
     absolute_allocation_changed (self);
 
-  if (x1_changed ||
-      y1_changed ||
-      x2_changed ||
-      y2_changed)
+  if (origin_changed || size_changed)
     {
       CLUTTER_NOTE (LAYOUT, "Allocation for '%s' changed",
                     _clutter_actor_get_debug_name (self));
-
-      transform_changed (self);
 
       g_object_notify_by_pspec (obj, obj_props[PROP_ALLOCATION]);
 
@@ -2859,7 +2891,7 @@ _clutter_actor_fully_transform_vertices (ClutterActor             *self,
                                          int                       n_vertices)
 {
   ClutterActor *stage;
-  CoglMatrix modelview;
+  CoglMatrix *modelview_projection;
   CoglMatrix projection;
   float viewport[4];
 
@@ -2872,20 +2904,17 @@ _clutter_actor_fully_transform_vertices (ClutterActor             *self,
   if (stage == NULL)
     return FALSE;
 
-  /* Note: we pass NULL as the ancestor because we don't just want the modelview
-   * that gets us to stage coordinates, we want to go all the way to eye
-   * coordinates */
-  _clutter_actor_get_relative_transformation_matrix (self, NULL, &modelview);
+  modelview_projection = clutter_actor_get_absolute_modelview_projection (self);
 
   /* Fetch the projection and viewport */
-  _clutter_stage_get_projection_matrix (CLUTTER_STAGE (stage), &projection);
+  clutter_matrix_init_identity (&projection);
   _clutter_stage_get_viewport (CLUTTER_STAGE (stage),
                                &viewport[0],
                                &viewport[1],
                                &viewport[2],
                                &viewport[3]);
 
-  _clutter_util_fully_transform_vertices (&modelview,
+  _clutter_util_fully_transform_vertices (modelview_projection,
                                           &projection,
                                           viewport,
                                           vertices_in,
@@ -2944,8 +2973,6 @@ clutter_actor_apply_transform_to_point (ClutterActor             *self,
  * instead.
  *
  */
-/* XXX: We should consider caching the stage relative modelview along with
- * the actor itself */
 static void
 _clutter_actor_get_relative_transformation_matrix (ClutterActor *self,
                                                    ClutterActor *ancestor,
@@ -3190,6 +3217,41 @@ _clutter_actor_apply_relative_transformation_matrix (ClutterActor *self,
                                                          matrix);
 
   _clutter_actor_apply_modelview_transform (self, matrix);
+}
+
+CoglMatrix *
+clutter_actor_get_absolute_modelview_projection (ClutterActor *self)
+{
+  ClutterActorPrivate *priv = self->priv;
+
+  if (priv->absolute_modelview_projection_valid)
+    return &priv->absolute_modelview_projection;
+
+  cogl_matrix_init_identity (&priv->absolute_modelview_projection);
+
+  if (priv->parent == NULL)
+    {
+      /* No parents, this must be the stage... */
+      ClutterStage *stage = CLUTTER_STAGE (self);
+      CoglMatrix projection;
+
+      _clutter_stage_get_projection_matrix (stage, &projection);
+      cogl_matrix_multiply (&priv->absolute_modelview_projection,
+                            &priv->absolute_modelview_projection,
+                            &projection);
+    }
+  else
+    {
+      cogl_matrix_multiply (&priv->absolute_modelview_projection,
+                            &priv->absolute_modelview_projection,
+                            clutter_actor_get_absolute_modelview_projection (priv->parent));
+    }
+
+  _clutter_actor_apply_modelview_transform (self,
+                                            &priv->absolute_modelview_projection);
+
+  priv->absolute_modelview_projection_valid = TRUE;
+  return &priv->absolute_modelview_projection;
 }
 
 static void
@@ -3835,10 +3897,6 @@ clutter_actor_paint (ClutterActor        *self,
    * the paint volume or use it to cull painting, since the paint
    * box represents the location of the source actor on the
    * screen.
-   *
-   * XXX: We are starting to do a lot of vertex transforms on
-   * the CPU in a typical paint, so at some point we should
-   * audit these and consider caching some things.
    *
    * NB: We don't perform culling while picking at this point because
    * clutter-stage.c doesn't setup the clipping planes appropriately.
@@ -8021,6 +8079,7 @@ clutter_actor_init (ClutterActor *self)
   priv->last_paint_volume_valid = TRUE;
 
   priv->transform_valid = FALSE;
+  priv->absolute_modelview_projection_valid = FALSE;
 
   /* the default is to stretch the content, to match the
    * current behaviour of basically all actors. also, it's

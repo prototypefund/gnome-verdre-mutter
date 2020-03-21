@@ -293,6 +293,8 @@ void clutter_actor_update_stage_views (ClutterActor *self,
 
 void clutter_actor_queue_immediate_relayout (ClutterActor *self);
 
+CoglMatrix * clutter_actor_get_absolute_modelview_projection (ClutterActor *self);
+
 G_END_DECLS
 
 #endif /* __CLUTTER_ACTOR_PRIVATE_H__ */

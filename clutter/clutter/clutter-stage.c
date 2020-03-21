@@ -2220,6 +2220,11 @@ _clutter_stage_dirty_projection (ClutterStage *stage)
 
       clutter_stage_view_invalidate_projection (view);
     }
+
+  /* The above didn't really invalidate our cached transformation matrix
+   * but the cached absolute-transform matrices of all actors.
+   */
+  clutter_actor_invalidate_transform (CLUTTER_ACTOR (stage));
 }
 
 /*

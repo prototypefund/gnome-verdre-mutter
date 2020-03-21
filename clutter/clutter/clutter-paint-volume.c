@@ -1130,20 +1130,25 @@ _clutter_paint_volume_get_stage_paint_box (ClutterPaintVolume *pv,
                                            ClutterActorBox *box)
 {
   ClutterPaintVolume projected_pv;
-  CoglMatrix modelview;
-  CoglMatrix projection;
+  CoglMatrix *modelview_projection;
+  CoglMatrix stage_projection, projection;
   float viewport[4];
 
   _clutter_paint_volume_copy_static (pv, &projected_pv);
 
-  cogl_matrix_init_identity (&modelview);
-
   /* If the paint volume isn't already in eye coordinates... */
   if (pv->actor)
-    _clutter_actor_apply_relative_transformation_matrix (pv->actor, NULL,
-                                                         &modelview);
+    {
+      modelview_projection =
+        clutter_actor_get_absolute_modelview_projection (pv->actor);
+    }
+  else
+    {
+      _clutter_stage_get_projection_matrix (stage, &stage_projection);
+      modelview_projection = &stage_projection;
+    }
 
-  _clutter_stage_get_projection_matrix (stage, &projection);
+  cogl_matrix_init_identity (&projection);
   _clutter_stage_get_viewport (stage,
                                &viewport[0],
                                &viewport[1],
@@ -1151,7 +1156,7 @@ _clutter_paint_volume_get_stage_paint_box (ClutterPaintVolume *pv,
                                &viewport[3]);
 
   _clutter_paint_volume_project (&projected_pv,
-                                 &modelview,
+                                 modelview_projection,
                                  &projection,
                                  viewport);
 
