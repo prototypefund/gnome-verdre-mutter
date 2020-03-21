@@ -2319,41 +2319,22 @@ _clutter_stage_dirty_viewport (ClutterStage *stage)
 }
 
 /*
- * clutter_stage_get_viewport:
+ * clutter_stage_peek_viewport: (skip)
  * @stage: A #ClutterStage
- * @x: A location for the X position where the stage is rendered,
- *     in window coordinates.
- * @y: A location for the Y position where the stage is rendered,
- *     in window coordinates.
- * @width: A location for the width the stage is rendered at,
- *         in window coordinates.
- * @height: A location for the height the stage is rendered at,
- *          in window coordinates.
  *
  * Returns the viewport offset and size set using
  * clutter_stage_set_viewport() or if the "viewport-mimics-window" property
- * is TRUE then @x and @y will be set to 0 and @width and @height will equal
+ * is TRUE then x and y will be set to 0 and width and height will equal
  * the width if the stage window.
  *
- * Since: 1.6
+ * Returns: A pointer to a float array with length 4, including the
+ *   x and y coordinates and the width and height of the viewport (in
+ *   that order).
  */
-void
-_clutter_stage_get_viewport (ClutterStage *stage,
-                             float        *x,
-                             float        *y,
-                             float        *width,
-                             float        *height)
+const float *
+clutter_stage_peek_viewport (ClutterStage *stage)
 {
-  ClutterStagePrivate *priv;
-
-  g_return_if_fail (CLUTTER_IS_STAGE (stage));
-
-  priv = stage->priv;
-
-  *x = priv->viewport[0];
-  *y = priv->viewport[1];
-  *width = priv->viewport[2];
-  *height = priv->viewport[3];
+  return stage->priv->viewport;
 }
 
 /**

@@ -241,6 +241,7 @@ clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
   float resource_scale;
   float ceiled_resource_scale;
   graphene_point3d_t local_offset;
+  const float *viewport;
   gfloat old_viewport[4];
 
   local_offset = GRAPHENE_POINT3D_INIT (0.0f, 0.0f, 0.0f);
@@ -312,11 +313,11 @@ clutter_offscreen_effect_pre_paint (ClutterEffect       *effect,
   cogl_framebuffer_set_modelview_matrix (priv->offscreen, &modelview);
 
   /* Save the original viewport for calculating priv->position */
-  _clutter_stage_get_viewport (CLUTTER_STAGE (priv->stage),
-                               &old_viewport[0],
-                               &old_viewport[1],
-                               &old_viewport[2],
-                               &old_viewport[3]);
+  viewport = clutter_stage_peek_viewport (CLUTTER_STAGE (priv->stage));
+  old_viewport[0] = viewport[0];
+  old_viewport[1] = viewport[1];
+  old_viewport[2] = viewport[2];
+  old_viewport[3] = viewport[3];
 
   /* Set up the viewport so that it has the same size as the stage (avoid
    * distortion), but translated to account for the FBO offset...

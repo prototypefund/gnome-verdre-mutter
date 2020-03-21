@@ -50,11 +50,7 @@ ClutterStageWindow *_clutter_stage_get_window            (ClutterStage          
 void                _clutter_stage_get_projection_matrix (ClutterStage          *stage,
                                                           CoglMatrix            *projection);
 void                _clutter_stage_dirty_projection      (ClutterStage          *stage);
-void                _clutter_stage_get_viewport          (ClutterStage          *stage,
-                                                          float                 *x,
-                                                          float                 *y,
-                                                          float                 *width,
-                                                          float                 *height);
+const float *       clutter_stage_peek_viewport          (ClutterStage          *stage);
 void                _clutter_stage_dirty_viewport        (ClutterStage          *stage);
 void                _clutter_stage_maybe_setup_viewport  (ClutterStage          *stage,
                                                           ClutterStageView      *view);

@@ -1129,7 +1129,7 @@ _clutter_paint_volume_get_stage_paint_box (ClutterPaintVolume *pv,
   ClutterPaintVolume projected_pv;
   CoglMatrix *modelview_projection;
   CoglMatrix stage_projection;
-  float viewport[4];
+  const float *viewport;
 
   _clutter_paint_volume_copy_static (pv, &projected_pv);
 
@@ -1145,11 +1145,7 @@ _clutter_paint_volume_get_stage_paint_box (ClutterPaintVolume *pv,
       modelview_projection = &stage_projection;
     }
 
-  _clutter_stage_get_viewport (stage,
-                               &viewport[0],
-                               &viewport[1],
-                               &viewport[2],
-                               &viewport[3]);
+  viewport = clutter_stage_peek_viewport (stage);
 
   _clutter_paint_volume_project (&projected_pv,
                                  modelview_projection,
