@@ -11292,6 +11292,63 @@ clutter_actor_get_transformed_size (ClutterActor *self,
     *height = y_max - y_min;
 }
 
+static void
+clutter_actor_get_transformed_allocation_size (ClutterActor *self,
+                                               gfloat       *width,
+                                               gfloat       *height)
+{
+  ClutterActorPrivate *priv;
+  graphene_point3d_t v[4];
+  gfloat x_min, x_max, y_min, y_max;
+  gint i;
+
+  g_return_if_fail (CLUTTER_IS_ACTOR (self));
+
+  priv = self->priv;
+
+  /* If the actor has no valid allocation, avoid the relayout done by
+   * clutter_actor_get_abs_allocation_vertices() and simply pass our latest
+   * allocation to _clutter_actor_transform_and_project_box().
+   */
+  if (priv->needs_allocation)
+    {
+      ClutterActorBox box;
+
+      box.x1 = 0;
+      box.y1 = 0;
+      box.x2 = priv->allocation.x2 - priv->allocation.x1;
+      box.y2 = priv->allocation.y2 - priv->allocation.y1;
+
+      _clutter_actor_transform_and_project_box (self, &box, v);
+    }
+  else
+    clutter_actor_get_abs_allocation_vertices (self, v);
+
+  x_min = x_max = v[0].x;
+  y_min = y_max = v[0].y;
+
+  for (i = 1; i < G_N_ELEMENTS (v); ++i)
+    {
+      if (v[i].x < x_min)
+        x_min = v[i].x;
+
+      if (v[i].x > x_max)
+        x_max = v[i].x;
+
+      if (v[i].y < y_min)
+        y_min = v[i].y;
+
+      if (v[i].y > y_max)
+        y_max = v[i].y;
+    }
+
+  if (width)
+    *width  = x_max - x_min;
+
+  if (height)
+    *height = y_max - y_min;
+}
+
 /**
  * clutter_actor_get_width:
  * @self: A #ClutterActor
@@ -17679,17 +17736,16 @@ _clutter_actor_compute_resource_scale (ClutterActor *self,
     {
       graphene_rect_t bounding_rect;
 
-      if (CLUTTER_ACTOR_IN_DESTRUCTION (actor) ||
-          CLUTTER_ACTOR_IN_PREF_SIZE (actor))
+      if (CLUTTER_ACTOR_IN_DESTRUCTION (actor))
         return FALSE;
 
       clutter_actor_get_transformed_position (actor,
                                               &bounding_rect.origin.x,
                                               &bounding_rect.origin.y);
 
-      clutter_actor_get_transformed_size (actor,
-                                          &bounding_rect.size.width,
-                                          &bounding_rect.size.height);
+      clutter_actor_get_transformed_allocation_size (actor,
+                                                     &bounding_rect.size.width,
+                                                     &bounding_rect.size.height);
 
       if (bounding_rect.size.width == 0.0 ||
           bounding_rect.size.height == 0.0)
