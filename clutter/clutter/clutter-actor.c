@@ -17680,8 +17680,7 @@ _clutter_actor_compute_resource_scale (ClutterActor *self,
       graphene_rect_t bounding_rect;
 
       if (CLUTTER_ACTOR_IN_DESTRUCTION (actor) ||
-          CLUTTER_ACTOR_IN_PREF_SIZE (actor) ||
-          !clutter_actor_is_mapped (actor))
+          CLUTTER_ACTOR_IN_PREF_SIZE (actor))
         return FALSE;
 
       clutter_actor_get_transformed_position (actor,
