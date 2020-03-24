@@ -7358,7 +7358,7 @@ clutter_actor_class_init (ClutterActorClass *klass)
                         P_("Resource Scale"),
                         P_("The Scaling factor for resources painting"),
                         -1.0f, G_MAXFLOAT,
-                        1.0f,
+                        -1.0f,
                         CLUTTER_PARAM_READABLE);
 
   /**
