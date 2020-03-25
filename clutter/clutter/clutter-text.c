@@ -921,7 +921,9 @@ clutter_text_resource_scale_changed_cb (GObject    *gobject,
 
   g_clear_pointer (&priv->effective_attrs, pango_attr_list_unref);
   clutter_text_dirty_cache (self);
-  clutter_actor_queue_relayout (CLUTTER_ACTOR (gobject));
+
+  if (clutter_actor_has_allocation (CLUTTER_ACTOR (self)))
+    clutter_actor_queue_relayout (CLUTTER_ACTOR (self));
 }
 
 /*
