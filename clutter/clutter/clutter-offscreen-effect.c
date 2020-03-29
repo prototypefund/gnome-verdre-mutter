@@ -459,6 +459,10 @@ clutter_offscreen_effect_post_paint (ClutterEffect       *effect,
   clutter_paint_context_pop_framebuffer (paint_context);
 
   clutter_offscreen_effect_paint_texture (self, paint_context);
+
+  /* If the effect was disabled during painting, clear the offscreen fb now */
+  if (!clutter_actor_meta_get_enabled (CLUTTER_ACTOR_META (effect)))
+    g_clear_pointer (&priv->offscreen, cogl_object_unref);
 }
 
 static void
@@ -505,7 +509,14 @@ clutter_offscreen_effect_notify (GObject    *gobject,
   ClutterOffscreenEffectPrivate *priv = offscreen_effect->priv;
 
   if (strcmp (pspec->name, "enabled") == 0)
-    g_clear_pointer (&priv->offscreen, cogl_object_unref);
+    {
+      /* If the effect gets disabled during painting, we finish painting and
+       * clear the offscreen framebuffer after that in the post_paint() handler
+       * to make sure we pop the matrix and fb we pushed to the paint_context.
+       */
+      if (!priv->actor || !CLUTTER_ACTOR_IN_PAINT (priv->actor))
+        g_clear_pointer (&priv->offscreen, cogl_object_unref);
+    }
 
   G_OBJECT_CLASS (clutter_offscreen_effect_parent_class)->notify (gobject, pspec);
 }
