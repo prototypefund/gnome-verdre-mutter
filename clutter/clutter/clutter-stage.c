@@ -147,6 +147,7 @@ struct _ClutterStagePrivate
   guint min_size_changed       : 1;
   guint motion_events_enabled  : 1;
   guint actor_needs_immediate_relayout : 1;
+  guint in_relayout            : 1;
 };
 
 enum
@@ -1241,6 +1242,14 @@ clutter_stage_maybe_relayout (ClutterActor *actor)
 
   CLUTTER_NOTE (ACTOR, ">>> Recomputing layout");
 
+  if (priv->in_relayout)
+    {
+      g_warning ("Tried to start a relayout while inside an allocation cycle");
+      return;
+    }
+
+  priv->in_relayout = TRUE;
+
   stolen_list = g_steal_pointer (&priv->pending_relayouts);
   for (l = stolen_list; l; l = l->next)
     {
@@ -1258,15 +1267,13 @@ clutter_stage_maybe_relayout (ClutterActor *actor)
         CLUTTER_NOTE (ACTOR, "    Shallow relayout of actor %s",
                       _clutter_actor_get_debug_name (queued_actor));
 
-      CLUTTER_SET_PRIVATE_FLAGS (queued_actor, CLUTTER_IN_RELAYOUT);
-
       clutter_actor_get_fixed_position (queued_actor, &x, &y);
       clutter_actor_allocate_preferred_size (queued_actor, x, y);
 
-      CLUTTER_UNSET_PRIVATE_FLAGS (queued_actor, CLUTTER_IN_RELAYOUT);
-
       count++;
     }
+
+  priv->in_relayout = FALSE;
 
   CLUTTER_NOTE (ACTOR, "<<< Completed recomputing layout of %d subtrees", count);
 
