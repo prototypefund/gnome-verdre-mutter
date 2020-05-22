@@ -2527,28 +2527,18 @@ clutter_actor_notify_if_geometry_changed (ClutterActor          *self,
 }
 
 static void
-absolute_allocation_changed (ClutterActor *actor)
+absolute_position_or_size_changed (ClutterActor *actor)
 {
   actor->priv->absolute_modelview_projection_valid = FALSE;
   queue_update_stage_views (actor);
 }
 
 static ClutterActorTraverseVisitFlags
-absolute_allocation_changed_cb (ClutterActor *actor,
-                                int           depth,
-                                gpointer      user_data)
+absolute_position_or_size_changed_cb (ClutterActor *actor,
+                                      int           depth,
+                                      gpointer      user_data)
 {
-  absolute_allocation_changed (actor);
-
-  return CLUTTER_ACTOR_TRAVERSE_VISIT_CONTINUE;
-}
-
-static ClutterActorTraverseVisitFlags
-invalidate_absolute_modelview_projection_cb (ClutterActor *actor,
-                                             int           depth,
-                                             gpointer      user_data)
-{
-  actor->priv->absolute_modelview_projection_valid = FALSE;
+  absolute_position_or_size_changed (actor);
 
   return CLUTTER_ACTOR_TRAVERSE_VISIT_CONTINUE;
 }
@@ -2560,7 +2550,7 @@ transform_changed (ClutterActor *actor)
 
   _clutter_actor_traverse (actor,
                            CLUTTER_ACTOR_TRAVERSE_DEPTH_FIRST,
-                           invalidate_absolute_modelview_projection_cb,
+                           absolute_position_or_size_changed_cb,
                            NULL,
                            NULL);
 }
@@ -2630,7 +2620,7 @@ clutter_actor_set_allocation_internal (ClutterActor           *self,
     }
 
   if (priv->absolute_origin_changed || size_changed)
-    absolute_allocation_changed (self);
+    absolute_position_or_size_changed (self);
 
   if (origin_changed || size_changed)
     {
@@ -9574,7 +9564,7 @@ clutter_actor_allocate (ClutterActor          *self,
         {
           _clutter_actor_traverse (self,
                                    CLUTTER_ACTOR_TRAVERSE_DEPTH_FIRST,
-                                   absolute_allocation_changed_cb,
+                                   absolute_position_or_size_changed_cb,
                                    NULL,
                                    NULL);
         }
@@ -9632,7 +9622,7 @@ clutter_actor_allocate (ClutterActor          *self,
         {
           _clutter_actor_traverse (self,
                                    CLUTTER_ACTOR_TRAVERSE_DEPTH_FIRST,
-                                   absolute_allocation_changed_cb,
+                                   absolute_position_or_size_changed_cb,
                                    NULL,
                                    NULL);
         }
