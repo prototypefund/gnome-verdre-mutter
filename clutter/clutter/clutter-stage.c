@@ -929,28 +929,27 @@ clutter_stage_get_paint_volume (ClutterActor *self,
 }
 
 static void
-clutter_stage_realize (ClutterActor *self)
-{
-  ClutterStagePrivate *priv = CLUTTER_STAGE (self)->priv;
-  gboolean is_realized;
-
-  g_assert (priv->impl != NULL);
-  is_realized = _clutter_stage_window_realize (priv->impl);
-
-  if (!is_realized)
-    CLUTTER_ACTOR_UNSET_FLAGS (self, CLUTTER_ACTOR_REALIZED);
-}
-
-static void
-clutter_stage_unrealize (ClutterActor *self)
+clutter_stage_notify_realized (ClutterActor *self)
 {
   ClutterStagePrivate *priv = CLUTTER_STAGE (self)->priv;
 
-  /* and then unrealize the implementation */
-  g_assert (priv->impl != NULL);
-  _clutter_stage_window_unrealize (priv->impl);
+  if (clutter_actor_is_realized (self))
+    {
+      gboolean is_realized;
 
-  CLUTTER_ACTOR_UNSET_FLAGS (self, CLUTTER_ACTOR_REALIZED);
+      g_assert (priv->impl != NULL);
+      is_realized = _clutter_stage_window_realize (priv->impl);
+
+      if (!is_realized)
+        CLUTTER_ACTOR_UNSET_FLAGS (self, CLUTTER_ACTOR_REALIZED);
+    }
+  else
+    {
+      g_assert (priv->impl != NULL);
+      _clutter_stage_window_unrealize (priv->impl);
+
+      CLUTTER_ACTOR_UNSET_FLAGS (self, CLUTTER_ACTOR_REALIZED);
+    }
 }
 
 static void
@@ -1764,8 +1763,6 @@ clutter_stage_class_init (ClutterStageClass *klass)
   actor_class->get_preferred_width = clutter_stage_get_preferred_width;
   actor_class->get_preferred_height = clutter_stage_get_preferred_height;
   actor_class->get_paint_volume = clutter_stage_get_paint_volume;
-  actor_class->realize = clutter_stage_realize;
-  actor_class->unrealize = clutter_stage_unrealize;
   actor_class->show = clutter_stage_show;
   actor_class->hide = clutter_stage_hide;
   actor_class->hide_all = clutter_stage_hide_all;
@@ -2058,6 +2055,9 @@ clutter_stage_init (ClutterStage *self)
                     G_CALLBACK (clutter_stage_notify_min_size), NULL);
   g_signal_connect (self, "notify::min-height",
                     G_CALLBACK (clutter_stage_notify_min_size), NULL);
+
+  g_signal_connect (self, "notify::realized",
+                    G_CALLBACK (clutter_stage_notify_realized), NULL);
 
   clutter_stage_set_viewport (self, geom.width, geom.height);
 

@@ -986,8 +986,6 @@ enum
   KEY_FOCUS_OUT,
   PAINT,
   PICK,
-  REALIZE,
-  UNREALIZE,
   QUEUE_REDRAW,
   QUEUE_RELAYOUT,
   EVENT,
@@ -2105,21 +2103,12 @@ clutter_actor_realize_internal (ClutterActor *self)
   CLUTTER_ACTOR_SET_FLAGS (self, CLUTTER_ACTOR_REALIZED);
   g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_REALIZED]);
 
-  g_signal_emit (self, actor_signals[REALIZE], 0);
-
   /* Stage actor is allowed to unset the realized flag again in its
    * default signal handler, though that is a pathological situation.
    */
 
   /* If realization "failed" we'll have to update child state. */
   clutter_actor_update_map_state (self, MAP_STATE_CHECK);
-}
-
-static void
-clutter_actor_real_unrealize (ClutterActor *self)
-{
-  /* we must be unmapped (implying our children are also unmapped) */
-  g_assert (!CLUTTER_ACTOR_IS_MAPPED (self));
 }
 
 /**
@@ -2190,8 +2179,6 @@ unrealize_actor_before_children_cb (ClutterActor *self,
    * already been unrealized... */
   if (!CLUTTER_ACTOR_IS_REALIZED (self))
     return CLUTTER_ACTOR_TRAVERSE_VISIT_SKIP_CHILDREN;
-
-  g_signal_emit (self, actor_signals[UNREALIZE], 0);
 
   return CLUTTER_ACTOR_TRAVERSE_VISIT_CONTINUE;
 }
@@ -6010,7 +5997,6 @@ clutter_actor_class_init (ClutterActorClass *klass)
   klass->hide_all = clutter_actor_hide;
   klass->map = clutter_actor_real_map;
   klass->unmap = clutter_actor_real_unmap;
-  klass->unrealize = clutter_actor_real_unrealize;
   klass->pick = clutter_actor_real_pick;
   klass->get_preferred_width = clutter_actor_real_get_preferred_width;
   klass->get_preferred_height = clutter_actor_real_get_preferred_height;
@@ -7820,44 +7806,6 @@ clutter_actor_class_init (ClutterActorClass *klass)
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 1,
                   CLUTTER_TYPE_PAINT_CONTEXT);
-  /**
-   * ClutterActor::realize:
-   * @actor: the #ClutterActor that received the signal
-   *
-   * The ::realize signal is emitted each time an actor is being
-   * realized.
-   *
-   * Since: 0.8
-   *
-   * Deprecated: 1.16: The signal should not be used in newly
-   *   written code
-   */
-  actor_signals[REALIZE] =
-    g_signal_new (I_("realize"),
-                  G_TYPE_FROM_CLASS (object_class),
-                  G_SIGNAL_RUN_LAST | G_SIGNAL_DEPRECATED,
-                  G_STRUCT_OFFSET (ClutterActorClass, realize),
-                  NULL, NULL, NULL,
-                  G_TYPE_NONE, 0);
-  /**
-   * ClutterActor::unrealize:
-   * @actor: the #ClutterActor that received the signal
-   *
-   * The ::unrealize signal is emitted each time an actor is being
-   * unrealized.
-   *
-   * Since: 0.8
-   *
-   * Deprecated: 1.16: The signal should not be used in newly
-   *   written code
-   */
-  actor_signals[UNREALIZE] =
-    g_signal_new (I_("unrealize"),
-                  G_TYPE_FROM_CLASS (object_class),
-                  G_SIGNAL_RUN_LAST | G_SIGNAL_DEPRECATED,
-                  G_STRUCT_OFFSET (ClutterActorClass, unrealize),
-                  NULL, NULL, NULL,
-                  G_TYPE_NONE, 0);
 
   /**
    * ClutterActor::pick:

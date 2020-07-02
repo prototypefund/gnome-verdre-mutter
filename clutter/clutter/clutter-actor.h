@@ -149,14 +149,6 @@ struct _ClutterActor
  *   clutter_actor_hide_all() on the actor. Defaults to calling
  *   clutter_actor_hide(). This virtual function is deprecated and it
  *   should not be overridden.
- * @realize: virtual function, used to allocate resources for the actor;
- *   it should chain up to the parent's implementation. This virtual
- *   function is deprecated and should not be overridden in newly
- *   written code.
- * @unrealize: virtual function, used to deallocate resources allocated
- *   in ::realize; it should chain up to the parent's implementation. This
- *   function is deprecated and should not be overridden in newly
- *   written code.
  * @map: virtual function for containers and composite actors, to
  *   map their children; it must chain up to the parent's implementation.
  *   Overriding this function is optional.
@@ -226,8 +218,6 @@ struct _ClutterActorClass
   void (* show)                 (ClutterActor          *self);
   void (* hide)                 (ClutterActor          *self);
   void (* hide_all)             (ClutterActor          *self);
-  void (* realize)              (ClutterActor          *self);
-  void (* unrealize)            (ClutterActor          *self);
   void (* map)                  (ClutterActor          *self);
   void (* unmap)                (ClutterActor          *self);
   void (* paint)                (ClutterActor          *self,
@@ -305,7 +295,7 @@ struct _ClutterActorClass
 
   /*< private >*/
   /* padding for future expansion */
-  gpointer _padding_dummy[25];
+  gpointer _padding_dummy[27];
 };
 
 /**
