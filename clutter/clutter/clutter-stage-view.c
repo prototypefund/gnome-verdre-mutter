@@ -29,6 +29,7 @@
 #include "clutter/clutter-mutter.h"
 #include "clutter/clutter-stage-private.h"
 #include "cogl/cogl.h"
+#include "cogl/cogl-trace.h"
 
 enum
 {
@@ -1085,6 +1086,8 @@ handle_frame_clock_frame (ClutterFrameClock *frame_clock,
 
   if (!clutter_actor_is_mapped (CLUTTER_ACTOR (stage)))
     return CLUTTER_FRAME_RESULT_IDLE;
+
+  COGL_TRACE_BEGIN_SCOPED (ClutterStageViewUpdate, "Update view");
 
   _clutter_run_repaint_functions (CLUTTER_REPAINT_FLAGS_PRE_PAINT);
   clutter_stage_emit_before_update (stage, view);
