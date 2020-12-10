@@ -47,6 +47,8 @@
 
 struct _ClutterTransitionGroupPrivate
 {
+  int last_elapsed_time_ms;
+
   GHashTable *transitions;
 };
 
@@ -63,8 +65,8 @@ clutter_transition_group_new_frame (ClutterTimeline *timeline,
 
   priv = CLUTTER_TRANSITION_GROUP (timeline)->priv;
 
-  /* get the time elapsed since the last ::new-frame... */
-  msecs = clutter_timeline_get_delta (timeline);
+  msecs = elapsed - priv->last_elapsed_time_ms;
+  priv->last_elapsed_time_ms = elapsed;
 
   g_hash_table_iter_init (&iter, priv->transitions);
   while (g_hash_table_iter_next (&iter, &element, NULL))
