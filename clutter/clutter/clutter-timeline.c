@@ -1090,9 +1090,9 @@ clutter_timeline_rewind (ClutterTimeline *timeline)
   priv = timeline->priv;
 
   if (priv->direction == CLUTTER_TIMELINE_FORWARD)
-    clutter_timeline_advance (timeline, 0);
+    clutter_timeline_seek (timeline, 0);
   else if (priv->direction == CLUTTER_TIMELINE_BACKWARD)
-    clutter_timeline_advance (timeline, priv->duration);
+    clutter_timeline_seek (timeline, priv->duration);
 }
 
 /**
@@ -1131,19 +1131,19 @@ clutter_timeline_skip (ClutterTimeline *timeline,
 }
 
 /**
- * clutter_timeline_advance:
+ * clutter_timeline_seek:
  * @timeline: A #ClutterTimeline
- * @msecs: Time to advance to
+ * @msecs: Time to seek to
  *
- * Advance timeline to the requested point. The point is given as a
+ * Seek timeline to the requested point. The point is given as a
  * time in milliseconds since the timeline started.
  *
  * The @timeline will not emit the #ClutterTimeline::new-frame
  * signal for the given time.
  */
 void
-clutter_timeline_advance (ClutterTimeline *timeline,
-                          guint            msecs)
+clutter_timeline_seek (ClutterTimeline *timeline,
+                       guint            msecs)
 {
   ClutterTimelinePrivate *priv;
 
