@@ -99,8 +99,8 @@ struct _ClutterTimelinePrivate
   guint delay_id;
 
   /* The total length in milliseconds of this timeline */
-  guint duration;
-  guint delay;
+  uint32_t duration;
+  uint32_t delay;
 
   /* The current amount of elapsed time */
   gint64 elapsed_time;
@@ -1100,7 +1100,7 @@ clutter_timeline_rewind (ClutterTimeline *timeline)
  */
 void
 clutter_timeline_seek (ClutterTimeline *timeline,
-                       guint            msecs)
+                       uint32_t         msecs)
 {
   ClutterTimelinePrivate *priv;
 
@@ -1119,7 +1119,7 @@ clutter_timeline_seek (ClutterTimeline *timeline,
  *
  * Return value: current elapsed time in milliseconds.
  */
-guint
+uint32_t
 clutter_timeline_get_elapsed_time (ClutterTimeline *timeline)
 {
   g_return_val_if_fail (CLUTTER_IS_TIMELINE (timeline), 0);
@@ -1155,7 +1155,7 @@ clutter_timeline_is_playing (ClutterTimeline *timeline)
  * Since: 0.6
  */
 ClutterTimeline *
-clutter_timeline_new (guint duration_ms)
+clutter_timeline_new (uint32_t duration_ms)
 {
   return g_object_new (CLUTTER_TYPE_TIMELINE,
                        "duration", duration_ms,
@@ -1174,7 +1174,7 @@ clutter_timeline_new (guint duration_ms)
  */
 ClutterTimeline *
 clutter_timeline_new_for_actor (ClutterActor *actor,
-                                unsigned int  duration_ms)
+                                uint32_t      duration_ms)
 {
   return g_object_new (CLUTTER_TYPE_TIMELINE,
                        "duration", duration_ms,
@@ -1194,7 +1194,7 @@ clutter_timeline_new_for_actor (ClutterActor *actor,
  */
 ClutterTimeline *
 clutter_timeline_new_for_frame_clock (ClutterFrameClock *frame_clock,
-                                      unsigned int       duration_ms)
+                                      uint32_t           duration_ms)
 {
   return g_object_new (CLUTTER_TYPE_TIMELINE,
                        "duration", duration_ms,
@@ -1212,7 +1212,7 @@ clutter_timeline_new_for_frame_clock (ClutterFrameClock *frame_clock,
  *
  * Since: 0.4
  */
-guint
+uint32_t
 clutter_timeline_get_delay (ClutterTimeline *timeline)
 {
   g_return_val_if_fail (CLUTTER_IS_TIMELINE (timeline), 0);
@@ -1231,7 +1231,7 @@ clutter_timeline_get_delay (ClutterTimeline *timeline)
  */
 void
 clutter_timeline_set_delay (ClutterTimeline *timeline,
-                            guint            msecs)
+                            uint32_t         msecs)
 {
   ClutterTimelinePrivate *priv;
 
@@ -1257,7 +1257,7 @@ clutter_timeline_set_delay (ClutterTimeline *timeline,
  *
  * Since: 0.6
  */
-guint
+uint32_t
 clutter_timeline_get_duration (ClutterTimeline *timeline)
 {
   ClutterTimelinePrivate *priv;
@@ -1281,7 +1281,7 @@ clutter_timeline_get_duration (ClutterTimeline *timeline)
  */
 void
 clutter_timeline_set_duration (ClutterTimeline *timeline,
-                               guint            msecs)
+                               uint32_t         msecs)
 {
   ClutterTimelinePrivate *priv;
 
