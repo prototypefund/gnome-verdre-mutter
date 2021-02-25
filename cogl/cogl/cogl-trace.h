@@ -73,8 +73,15 @@ cogl_trace_begin (CoglTraceHead *head,
   head->name = name;
 }
 
+
+COGL_EXPORT void
+cogl_trace_generic_begin (const char *name);
+
 COGL_EXPORT void
 cogl_trace_end (CoglTraceHead *head);
+
+COGL_EXPORT void
+cogl_trace_generic_end (void);
 
 static inline void
 cogl_auto_trace_end_helper (CoglTraceHead **head)

@@ -251,6 +251,22 @@ cogl_set_tracing_disabled_on_thread (GMainContext *main_context)
   g_source_unref (source);
 }
 
+static CoglTraceHead CoglTraceGeneric = { 0 };
+
+void
+cogl_trace_generic_begin (const char *name)
+{
+  if (g_private_get (&cogl_trace_thread_data))
+    cogl_trace_begin (&CoglTraceGeneric, g_strdup (name));
+}
+
+void
+cogl_trace_generic_end (void)
+{
+  if (g_private_get (&cogl_trace_thread_data))
+    cogl_trace_end (&CoglTraceGeneric);
+}
+
 void
 cogl_trace_end (CoglTraceHead *head)
 {
