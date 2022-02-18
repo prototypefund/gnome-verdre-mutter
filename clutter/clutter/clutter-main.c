@@ -1034,6 +1034,8 @@ _clutter_process_event (ClutterEvent *event)
   ClutterMainContext *context;
   ClutterActor *stage;
   ClutterSeat *seat;
+  ClutterInputDevice *device;
+  ClutterEventSequence *sequence;
 
   context = _clutter_context_get_default ();
   seat = clutter_backend_get_default_seat (context->backend);
@@ -1043,6 +1045,61 @@ _clutter_process_event (ClutterEvent *event)
     {
       CLUTTER_NOTE (EVENT, "Discarding event without a stage set");
       return;
+    }
+
+  device = clutter_event_get_device (event);
+  sequence = clutter_event_get_event_sequence (event);
+
+  /* Update event source actor in case it changed while the event has been
+   * sitting in the stage queue.
+   */
+  if (device)
+    {
+      ClutterActor *actor = NULL;
+
+      switch (event->any.type)
+        {
+        case CLUTTER_DEVICE_ADDED:
+        case CLUTTER_DEVICE_REMOVED:
+          break;
+
+        case CLUTTER_KEY_PRESS:
+        case CLUTTER_KEY_RELEASE:
+        case CLUTTER_PAD_BUTTON_PRESS:
+        case CLUTTER_PAD_BUTTON_RELEASE:
+        case CLUTTER_PAD_STRIP:
+        case CLUTTER_PAD_RING:
+        case CLUTTER_IM_COMMIT:
+        case CLUTTER_IM_DELETE:
+        case CLUTTER_IM_PREEDIT:
+          actor = clutter_stage_get_key_focus (event->any.stage);
+          break;
+
+        case CLUTTER_ENTER:
+        case CLUTTER_MOTION:
+        case CLUTTER_BUTTON_PRESS:
+        case CLUTTER_TOUCH_BEGIN:
+        case CLUTTER_TOUCH_UPDATE:
+        case CLUTTER_LEAVE:
+        case CLUTTER_BUTTON_RELEASE:
+        case CLUTTER_TOUCH_END:
+        case CLUTTER_TOUCH_CANCEL:
+        case CLUTTER_SCROLL:
+        case CLUTTER_TOUCHPAD_PINCH:
+        case CLUTTER_TOUCHPAD_SWIPE:
+        case CLUTTER_TOUCHPAD_HOLD:
+        case CLUTTER_PROXIMITY_IN:
+        case CLUTTER_PROXIMITY_OUT:
+          actor = clutter_stage_get_device_actor (event->any.stage,
+                                                  device, sequence);
+          break;
+        case CLUTTER_NOTHING:
+        case CLUTTER_EVENT_LAST:
+          g_assert_not_reached ();
+          break;
+        }
+
+      clutter_event_set_source (event, actor);
     }
 
   /* push events on a stack, so that we don't need to
