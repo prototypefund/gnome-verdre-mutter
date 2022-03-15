@@ -282,7 +282,8 @@ event_within_drag_threshold (ClutterClickAction *click_action,
 
 static gboolean
 clutter_click_action_handle_event (ClutterAction      *action,
-                                   const ClutterEvent *event)
+                                   const ClutterEvent *event,
+                                   ClutterActor       *crossing_source_actor)
 {
   ClutterClickAction *click_action = CLUTTER_CLICK_ACTION (action);
   ClutterClickActionPrivate *priv =

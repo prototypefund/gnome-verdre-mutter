@@ -52,7 +52,8 @@ struct _ClutterActionClass
   ClutterActorMetaClass parent_class;
 
   gboolean (* handle_event) (ClutterAction      *action,
-                             const ClutterEvent *event);
+                             const ClutterEvent *event,
+                             ClutterActor       *crossing_source_actor);
 
   void (* sequences_cancelled) (ClutterAction        *action,
                                 ClutterInputDevice   *device,

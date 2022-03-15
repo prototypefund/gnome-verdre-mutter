@@ -351,7 +351,8 @@ begin_gesture (ClutterGestureAction *action,
 
 static gboolean
 clutter_gesture_action_handle_event (ClutterAction      *action,
-                                     const ClutterEvent *event)
+                                     const ClutterEvent *event,
+                                     ClutterActor       *crossing_source_actor)
 {
   ClutterGestureAction *gesture_action = CLUTTER_GESTURE_ACTION (action);
   ClutterGestureActionPrivate *priv =

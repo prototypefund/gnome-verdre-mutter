@@ -60,7 +60,8 @@ G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (ClutterAction, clutter_action,
 
 static gboolean
 clutter_action_handle_event_default (ClutterAction      *action,
-                                     const ClutterEvent *event)
+                                     const ClutterEvent *event,
+                                     ClutterActor       *crossing_source_actor)
 {
   return FALSE;
 }
@@ -100,9 +101,10 @@ clutter_action_get_phase (ClutterAction *action)
 
 gboolean
 clutter_action_handle_event (ClutterAction      *action,
-                             const ClutterEvent *event)
+                             const ClutterEvent *event,
+                             ClutterActor       *crossing_source_actor)
 {
-  return CLUTTER_ACTION_GET_CLASS (action)->handle_event (action, event);
+  return CLUTTER_ACTION_GET_CLASS (action)->handle_event (action, event, crossing_source_actor);
 }
 
 void

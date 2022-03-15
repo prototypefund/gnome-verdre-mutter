@@ -37,7 +37,8 @@ void clutter_action_set_phase (ClutterAction     *action,
                                ClutterEventPhase  phase);
 
 gboolean clutter_action_handle_event (ClutterAction      *action,
-                                      const ClutterEvent *event);
+                                      const ClutterEvent *event,
+                                      ClutterActor       *crossing_source_actor);
 
 void clutter_action_sequences_cancelled (ClutterAction        *action,
                                          ClutterInputDevice   *device,

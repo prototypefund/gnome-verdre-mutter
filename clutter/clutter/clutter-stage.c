@@ -3445,6 +3445,7 @@ create_crossing_event (ClutterStage         *stage,
 
 static gboolean
 emit_discrete_event_on_actions (const ClutterEvent *event,
+                                ClutterActor       *crossing_source_actor,
                                 GPtrArray          *actions)
 {
   unsigned int i;
@@ -3453,7 +3454,7 @@ emit_discrete_event_on_actions (const ClutterEvent *event,
     {
       ClutterAction *action = g_ptr_array_index (actions, i);
 
-      if (clutter_action_handle_event (action, event))
+      if (clutter_action_handle_event (action, event, crossing_source_actor))
         return TRUE;
     }
 
@@ -3462,6 +3463,7 @@ emit_discrete_event_on_actions (const ClutterEvent *event,
 
 static void
 emit_sequence_event_on_actions (const ClutterEvent *event,
+                                ClutterActor       *crossing_source_actor,
                                 GPtrArray          *actions)
 {
   unsigned int i;
@@ -3469,7 +3471,7 @@ emit_sequence_event_on_actions (const ClutterEvent *event,
   for (i = 0; i < actions->len; i++)
     {
       ClutterAction *action = g_ptr_array_index (actions, i);
-      clutter_action_handle_event (action, event);
+      clutter_action_handle_event (action, event, crossing_source_actor);
     }
 }
 
@@ -3494,7 +3496,7 @@ clutter_stage_emit_crossing_event (ClutterStage       *self,
 
   if (entry->sequence_grabbed)
     {
-      emit_sequence_event_on_actions (event, entry->event_actions);
+      emit_sequence_event_on_actions (event, source_actor, entry->event_actions);
       _clutter_actor_handle_event (deepmost, topmost, event);
     }
   else
@@ -3512,7 +3514,7 @@ clutter_stage_emit_crossing_event (ClutterStage       *self,
                                            topmost,
                                            event_actions);
 
-      g_warn_if_fail (!emit_discrete_event_on_actions (event, event_actions));
+      g_warn_if_fail (!emit_discrete_event_on_actions (event, source_actor, event_actions));
       _clutter_actor_handle_event (deepmost, topmost, event);
 
       g_ptr_array_free (event_actions, TRUE);
@@ -4319,7 +4321,7 @@ clutter_stage_emit_event (ClutterStage       *self,
 
   if (entry && entry->sequence_grabbed)
     {
-      emit_sequence_event_on_actions (event, entry->event_actions);
+      emit_sequence_event_on_actions (event, NULL, entry->event_actions);
       _clutter_actor_handle_event (target_actor, seat_grab_actor, event);
 
       if (is_sequence_end && release_sequence_grab (entry))
@@ -4331,7 +4333,7 @@ clutter_stage_emit_event (ClutterStage       *self,
                                            seat_grab_actor,
                                            priv->cur_event_actions);
 
-      if (!emit_discrete_event_on_actions (event, priv->cur_event_actions))
+      if (!emit_discrete_event_on_actions (event, NULL, priv->cur_event_actions))
         _clutter_actor_handle_event (target_actor, seat_grab_actor, event);
 
       g_ptr_array_remove_range (priv->cur_event_actions, 0,
