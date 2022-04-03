@@ -12271,38 +12271,6 @@ clutter_actor_set_child_at_index (ClutterActor *self,
  * Event handling
  */
 
-static gboolean
-clutter_actor_run_actions (ClutterActor       *self,
-                           const ClutterEvent *event,
-                           ClutterEventPhase   phase)
-{
-  ClutterActorPrivate *priv;
-  const GList *actions, *l;
-  gboolean retval = CLUTTER_EVENT_PROPAGATE;
-
-  priv = self->priv;
-  if (!priv->actions)
-    return CLUTTER_EVENT_PROPAGATE;
-
-  actions = _clutter_meta_group_peek_metas (priv->actions);
-
-  for (l = actions; l; l = l->next)
-    {
-      ClutterAction *action = l->data;
-      ClutterEventPhase action_phase;
-
-      action_phase = clutter_action_get_phase (action);
-
-      if (action_phase == phase)
-        {
-          if (clutter_action_handle_event (action, event))
-            retval = CLUTTER_EVENT_STOP;
-        }
-    }
-
-  return retval;
-}
-
 /**
  * clutter_actor_event:
  * @actor: a #ClutterActor
@@ -12324,7 +12292,6 @@ clutter_actor_event (ClutterActor       *actor,
                      const ClutterEvent *event,
                      gboolean            capture)
 {
-  ClutterEventPhase phase;
   gboolean retval = FALSE;
   gint signal_num = -1;
   GQuark detail = 0;
@@ -12333,11 +12300,6 @@ clutter_actor_event (ClutterActor       *actor,
   g_return_val_if_fail (event != NULL, FALSE);
 
   g_object_ref (actor);
-
-  phase = capture ? CLUTTER_PHASE_CAPTURE : CLUTTER_PHASE_BUBBLE;
-  retval = clutter_actor_run_actions (actor, event, phase);
-  if (retval)
-    goto handled;
 
   switch (event->type)
     {
@@ -12422,7 +12384,6 @@ clutter_actor_event (ClutterActor       *actor,
         g_signal_emit (actor, actor_signals[signal_num], 0, event, &retval);
     }
 
- handled:
   g_object_unref (actor);
 
   if (event->type == CLUTTER_ENTER || event->type == CLUTTER_LEAVE)
@@ -19741,4 +19702,64 @@ clutter_actor_detach_grab (ClutterActor *self,
   ClutterActorPrivate *priv = self->priv;
 
   priv->grabs = g_list_remove (priv->grabs, grab);
+}
+
+static void
+collect_actions_for_phase (ClutterActor      *self,
+                           ClutterActor      *root,
+                           GPtrArray         *array,
+                           ClutterEventPhase  phase)
+{
+  ClutterActorPrivate *priv = self->priv;
+  gboolean is_reactive;
+
+  is_reactive =
+    CLUTTER_ACTOR_IS_REACTIVE (self) || /* an actor must be reactive */
+    priv->parent == NULL;               /* unless it's the stage */
+
+  if (phase == CLUTTER_PHASE_CAPTURE && priv->parent && self != root)
+    collect_actions_for_phase (priv->parent, root, array, phase);
+
+  if (is_reactive && priv->actions != NULL)
+    {
+      const GList *actions, *l;
+
+      actions = _clutter_meta_group_peek_metas (priv->actions);
+      for (l = actions; l; l = l->next)
+        {
+          ClutterAction *action = l->data;
+
+          if (!clutter_actor_meta_get_enabled (CLUTTER_ACTOR_META (action)))
+            continue;
+
+          if (clutter_action_get_phase (action) == phase)
+            g_ptr_array_add (array, g_object_ref (action));
+        }
+    }
+
+  if (phase == CLUTTER_PHASE_BUBBLE && priv->parent && self != root)
+    collect_actions_for_phase (priv->parent, root, array, phase);
+}
+
+void
+clutter_actor_collect_event_actions (ClutterActor *self,
+                                     ClutterActor *root,
+                                     GPtrArray    *array)
+{
+  g_assert (array->len == 0);
+
+  if (root && !clutter_actor_contains (root, self))
+    {
+      /* The grab root conceptually extends infinitely in all
+       * directions, so it handles the events that fall outside of
+       * the actor.
+       */
+      collect_actions_for_phase (root, root, array, CLUTTER_PHASE_CAPTURE);
+      collect_actions_for_phase (root, root, array, CLUTTER_PHASE_BUBBLE);
+    }
+  else
+    {
+      collect_actions_for_phase (self, root, array, CLUTTER_PHASE_CAPTURE);
+      collect_actions_for_phase (self, root, array, CLUTTER_PHASE_BUBBLE);
+    }
 }

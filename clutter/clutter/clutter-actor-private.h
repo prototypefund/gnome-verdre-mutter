@@ -278,6 +278,10 @@ void clutter_actor_attach_grab (ClutterActor *actor,
 void clutter_actor_detach_grab (ClutterActor *actor,
                                 ClutterGrab  *grab);
 
+void clutter_actor_collect_event_actions (ClutterActor *self,
+                                          ClutterActor *root,
+                                          GPtrArray    *actions);
+
 G_END_DECLS
 
 #endif /* __CLUTTER_ACTOR_PRIVATE_H__ */

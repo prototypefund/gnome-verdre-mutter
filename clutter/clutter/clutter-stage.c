@@ -44,6 +44,7 @@
 #include "clutter-stage.h"
 #include "deprecated/clutter-container.h"
 
+#include "clutter-action-private.h"
 #include "clutter-actor-private.h"
 #include "clutter-backend-private.h"
 #include "clutter-cairo.h"
@@ -119,6 +120,7 @@ struct _ClutterStagePrivate
   ClutterGrabState grab_state;
 
   GQueue *event_queue;
+  GPtrArray *cur_event_actions;
 
   GArray *paint_volume_stack;
 
@@ -1229,6 +1231,9 @@ clutter_stage_finalize (GObject *object)
   g_queue_foreach (priv->event_queue, (GFunc) clutter_event_free, NULL);
   g_queue_free (priv->event_queue);
 
+  g_assert (priv->cur_event_actions->len == 0);
+  g_ptr_array_free (priv->cur_event_actions, TRUE);
+
   g_hash_table_destroy (priv->pointer_devices);
   g_hash_table_destroy (priv->touch_sequences);
 
@@ -1580,6 +1585,9 @@ clutter_stage_init (ClutterStage *self)
     }
 
   priv->event_queue = g_queue_new ();
+  priv->cur_event_actions = g_ptr_array_sized_new (32);
+  g_ptr_array_set_free_func (priv->cur_event_actions,
+                             (GDestroyNotify) g_object_unref);
 
   priv->pointer_devices =
     g_hash_table_new_full (NULL, NULL,
@@ -3424,6 +3432,23 @@ create_crossing_event (ClutterStage         *stage,
   return event;
 }
 
+static gboolean
+emit_discrete_event_on_actions (const ClutterEvent *event,
+                                GPtrArray          *actions)
+{
+  unsigned int i;
+
+  for (i = 0; i < actions->len; i++)
+    {
+      ClutterAction *action = g_ptr_array_index (actions, i);
+
+      if (clutter_action_handle_event (action, event))
+        return TRUE;
+    }
+
+  return FALSE;
+}
+
 static void
 clutter_stage_emit_crossing_event (ClutterStage       *self,
                                    const ClutterEvent *event,
@@ -3431,7 +3456,23 @@ clutter_stage_emit_crossing_event (ClutterStage       *self,
                                    ClutterActor       *deepmost,
                                    ClutterActor       *topmost)
 {
+  GPtrArray *event_actions;
+
+  /* Crossings can happen while we're in the middle of event emission
+   * (for example when an actor goes unmapped or gets grabbed), so we
+   * can't reuse our existing GPtrArray here, it might already be in use.
+   */
+  event_actions = g_ptr_array_sized_new (16);
+  g_ptr_array_set_free_func (event_actions, (GDestroyNotify) g_object_unref);
+
+  clutter_actor_collect_event_actions (deepmost,
+                                       topmost,
+                                       event_actions);
+
+  g_warn_if_fail (!emit_discrete_event_on_actions (event, event_actions));
   _clutter_actor_handle_event (deepmost, topmost, event);
+
+  g_ptr_array_free (event_actions, TRUE);
 }
 
 void
@@ -4040,7 +4081,7 @@ clutter_stage_emit_event (ClutterStage       *self,
   ClutterInputDevice *device = clutter_event_get_device (event);
   ClutterEventSequence *sequence = clutter_event_get_event_sequence (event);
   PointerDeviceEntry *entry;
-  ClutterActor *target_actor = NULL;
+  ClutterActor *target_actor = NULL, *seat_grab_actor = NULL;
 
   if (sequence != NULL)
     entry = g_hash_table_lookup (priv->touch_sequences, sequence);
@@ -4106,8 +4147,15 @@ clutter_stage_emit_event (ClutterStage       *self,
     }
 
   g_assert (target_actor != NULL);
+  seat_grab_actor = clutter_stage_get_grab_actor (self);
 
-  _clutter_actor_handle_event (target_actor,
-                               clutter_stage_get_grab_actor (self),
-                               event);
+  clutter_actor_collect_event_actions (target_actor,
+                                       seat_grab_actor,
+                                       priv->cur_event_actions);
+
+  if (!emit_discrete_event_on_actions (event, priv->cur_event_actions))
+    _clutter_actor_handle_event (target_actor, seat_grab_actor, event);
+
+  g_ptr_array_remove_range (priv->cur_event_actions, 0,
+                            priv->cur_event_actions->len);
 }
