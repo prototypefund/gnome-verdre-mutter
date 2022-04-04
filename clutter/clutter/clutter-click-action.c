@@ -424,6 +424,15 @@ clutter_click_action_handle_event (ClutterAction      *action,
 }
 
 static void
+clutter_click_action_sequences_cancelled (ClutterAction        *action,
+                                          ClutterInputDevice   *device,
+                                          ClutterEventSequence *sequences,
+                                          size_t                n_sequences)
+{
+  clutter_click_action_release (CLUTTER_CLICK_ACTION (action));
+}
+
+static void
 clutter_click_action_set_actor (ClutterActorMeta *meta,
                                 ClutterActor     *actor)
 {
@@ -530,6 +539,7 @@ clutter_click_action_class_init (ClutterClickActionClass *klass)
   ClutterActionClass *action_class = CLUTTER_ACTION_CLASS (klass);
 
   action_class->handle_event = clutter_click_action_handle_event;
+  action_class->sequences_cancelled = clutter_click_action_sequences_cancelled;
 
   meta_class->set_actor = clutter_click_action_set_actor;
   meta_class->set_enabled = clutter_click_action_set_enabled;
