@@ -384,16 +384,6 @@ clutter_gesture_action_handle_event (ClutterAction      *action,
     {
     case CLUTTER_ENTER:
     case CLUTTER_LEAVE:
-      if (point &&
-          event_type == CLUTTER_LEAVE &&
-          (event->crossing.flags & CLUTTER_EVENT_FLAG_GRAB_NOTIFY) != 0)
-        {
-          gesture_unregister_point (gesture_action, position);
-
-          if (priv->in_gesture)
-            cancel_gesture (gesture_action);
-        }
-
       return CLUTTER_EVENT_PROPAGATE;
 
     case CLUTTER_BUTTON_PRESS:
@@ -512,6 +502,65 @@ clutter_gesture_action_handle_event (ClutterAction      *action,
   return priv->in_gesture ?
     CLUTTER_EVENT_STOP :
     CLUTTER_EVENT_PROPAGATE;
+}
+
+static gboolean
+has_point (ClutterGestureAction *self,
+           ClutterInputDevice   *device,
+           ClutterEventSequence *sequence)
+{
+  ClutterGestureActionPrivate *priv =
+    clutter_gesture_action_get_instance_private (self);
+  int i;
+
+  for (i = 0; i < priv->points->len; i++)
+    {
+      if ((g_array_index (priv->points, GesturePoint, i).device == device) &&
+          (g_array_index (priv->points, GesturePoint, i).sequence == sequence))
+        return TRUE;
+    }
+
+  return FALSE;
+}
+
+static void
+clutter_gesture_action_sequences_cancelled (ClutterAction        *action,
+                                            ClutterInputDevice   *device,
+                                            ClutterEventSequence *sequences,
+                                            size_t                n_sequences)
+{
+  ClutterGestureAction *self = CLUTTER_GESTURE_ACTION (action);
+  ClutterGestureActionPrivate *priv =
+    clutter_gesture_action_get_instance_private (self);
+  gboolean should_cancel = FALSE;
+
+  gpointer *array = (gpointer *) sequences;
+
+  if (n_sequences == 0)
+    {
+      should_cancel = has_point (self, device, NULL);
+    }
+  else
+    {
+      int i;
+
+      for (i = 0; i < n_sequences; i++)
+        {
+          ClutterEventSequence *sequence = (ClutterEventSequence *) &array[i];
+
+          if (has_point (self, device, sequence))
+            {
+              should_cancel = TRUE;
+              break;
+            }
+        }
+    }
+
+  if (should_cancel && priv->in_gesture)
+    {
+      priv->in_gesture = FALSE;
+      cancel_gesture (self);
+    }
 }
 
 static void
@@ -644,6 +693,7 @@ clutter_gesture_action_class_init (ClutterGestureActionClass *klass)
   meta_class->set_enabled = clutter_gesture_action_set_enabled;
 
   action_class->handle_event = clutter_gesture_action_handle_event;
+  action_class->sequences_cancelled = clutter_gesture_action_sequences_cancelled;
 
   klass->gesture_begin = default_event_handler;
   klass->gesture_progress = default_event_handler;
