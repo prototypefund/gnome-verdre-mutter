@@ -797,11 +797,21 @@ clutter_do_event (ClutterEvent *event)
       context->current_event =
         g_slist_delete_link (context->current_event, context->current_event);
 
-      if (event->type == CLUTTER_TOUCH_END ||
+      if (event->type == CLUTTER_MOTION ||
+          event->type == CLUTTER_BUTTON_RELEASE ||
+          event->type == CLUTTER_TOUCH_UPDATE ||
+          event->type == CLUTTER_TOUCH_END ||
           event->type == CLUTTER_TOUCH_CANCEL)
         {
+          ClutterInputDevice *device = clutter_event_get_device (event);
+          ClutterEventSequence *sequence = clutter_event_get_event_sequence (event);
+
           _clutter_stage_process_queued_events (event->any.stage);
-          remove_device_for_event (event->any.stage, event, TRUE);
+          clutter_stage_maybe_lost_sequence_grab (event->any.stage, device, sequence);
+
+          if (event->type == CLUTTER_TOUCH_END ||
+              event->type == CLUTTER_TOUCH_CANCEL)
+            remove_device_for_event (event->any.stage, event, TRUE);
         }
 
       return;

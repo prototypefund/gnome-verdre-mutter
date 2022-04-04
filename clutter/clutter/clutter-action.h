@@ -54,6 +54,12 @@ struct _ClutterActionClass
   gboolean (* handle_event) (ClutterAction      *action,
                              const ClutterEvent *event);
 
+  void (* sequences_cancelled) (ClutterAction        *action,
+                                ClutterInputDevice   *device,
+                                ClutterEventSequence *sequences,
+                                size_t                n_sequences);
+
+
   void (* _clutter_action1) (void);
   void (* _clutter_action2) (void);
   void (* _clutter_action3) (void);
