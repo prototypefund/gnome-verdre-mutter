@@ -3946,6 +3946,20 @@ clutter_stage_grab (ClutterStage *stage,
     priv->topmost_grab->prev = grab;
 
   priv->topmost_grab = grab;
+
+  if (G_UNLIKELY (clutter_debug_flags & CLUTTER_DEBUG_GRABS))
+    {
+      unsigned int n_grabs = 0;
+      ClutterGrab *g;
+
+      for (g = priv->topmost_grab; g != NULL; g = g->next)
+        n_grabs++;
+
+      CLUTTER_NOTE (GRABS,
+                    "[grab=%p] Attached seat grab (n_grabs: %u) on actor: %s",
+                    grab, n_grabs, _clutter_actor_get_debug_name (actor));
+    }
+
   clutter_actor_attach_grab (actor, grab);
   clutter_stage_notify_grab (stage, grab, grab->next);
 
@@ -3991,6 +4005,19 @@ clutter_stage_unlink_grab (ClutterStage *stage,
       seat = clutter_backend_get_default_seat (context->backend);
       clutter_seat_ungrab (seat, clutter_get_current_event_time ());
       priv->grab_state = CLUTTER_GRAB_STATE_NONE;
+    }
+
+  if (G_UNLIKELY (clutter_debug_flags & CLUTTER_DEBUG_GRABS))
+    {
+      unsigned int n_grabs = 0;
+      ClutterGrab *g;
+
+      for (g = priv->topmost_grab; g != NULL; g = g->next)
+        n_grabs++;
+
+      CLUTTER_NOTE (GRABS,
+                    "[grab=%p] Detached seat grab (n_grabs: %u)",
+                    grab, n_grabs);
     }
 
   grab->next = NULL;
@@ -4130,6 +4157,10 @@ setup_sequence_grab (PointerDeviceEntry *entry)
       return FALSE;
     }
 
+  CLUTTER_NOTE (GRABS,
+                "[device=%p sequence=%p] Aquiring sequence grab",
+                entry->device, entry->sequence);
+
   g_assert (entry->sequence_grabbed == 0);
   g_assert (entry->event_actions->len == 0);
 
@@ -4149,6 +4180,10 @@ release_sequence_grab (PointerDeviceEntry *entry)
       entry->sequence_grabbed--;
       return FALSE;
     }
+
+  CLUTTER_NOTE (GRABS,
+                "[device=%p sequence=%p] Releasing sequence grab",
+                entry->device, entry->sequence);
 
   g_assert (entry->sequence_grabbed == 1);
 
@@ -4174,6 +4209,10 @@ clutter_stage_maybe_lost_sequence_grab (ClutterStage         *self,
 
   if (!entry->sequence_grabbed)
     return;
+
+  CLUTTER_NOTE (GRABS,
+                "[device=%p sequence=%p] Lost sequence grab",
+                device, sequence);
 
   for (i = 0; i < entry->event_actions->len; i++)
     {
