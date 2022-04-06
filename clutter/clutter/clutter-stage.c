@@ -4067,6 +4067,20 @@ clutter_stage_grab (ClutterStage *stage,
     priv->topmost_grab->prev = grab;
 
   priv->topmost_grab = grab;
+
+  if (G_UNLIKELY (clutter_debug_flags & CLUTTER_DEBUG_GRABS))
+    {
+      unsigned int n_grabs = 0;
+      ClutterGrab *g;
+
+      for (g = priv->topmost_grab; g != NULL; g = g->next)
+        n_grabs++;
+
+      CLUTTER_NOTE (GRABS,
+                    "[grab=%p] Attached seat grab (n_grabs: %u) on actor: %s",
+                    grab, n_grabs, _clutter_actor_get_debug_name (actor));
+    }
+
   clutter_actor_attach_grab (actor, grab);
   clutter_stage_notify_grab (stage, grab, grab->next);
 
@@ -4112,6 +4126,19 @@ clutter_stage_unlink_grab (ClutterStage *stage,
       seat = clutter_backend_get_default_seat (context->backend);
       clutter_seat_ungrab (seat, clutter_get_current_event_time ());
       priv->grab_state = CLUTTER_GRAB_STATE_NONE;
+    }
+
+  if (G_UNLIKELY (clutter_debug_flags & CLUTTER_DEBUG_GRABS))
+    {
+      unsigned int n_grabs = 0;
+      ClutterGrab *g;
+
+      for (g = priv->topmost_grab; g != NULL; g = g->next)
+        n_grabs++;
+
+      CLUTTER_NOTE (GRABS,
+                    "[grab=%p] Detached seat grab (n_grabs: %u)",
+                    grab, n_grabs);
     }
 
   grab->next = NULL;
@@ -4294,6 +4321,10 @@ setup_sequence_grab (PointerDeviceEntry *entry)
       return FALSE;
     }
 
+  CLUTTER_NOTE (GRABS,
+                "[device=%p sequence=%p] Aquiring sequence grab",
+                entry->device, entry->sequence);
+
   g_assert (entry->press_count == 0);
   g_assert (entry->event_emission_chain->len == 0);
 
@@ -4314,6 +4345,10 @@ release_sequence_grab (PointerDeviceEntry *entry)
       return FALSE;
     }
 
+  CLUTTER_NOTE (GRABS,
+                "[device=%p sequence=%p] Releasing sequence grab",
+                entry->device, entry->sequence);
+
   g_assert (entry->press_count == 1);
 
   entry->press_count = 0;
@@ -4328,6 +4363,11 @@ sequence_grab_actor_mapped_changed (ClutterActor       *actor,
   if (CLUTTER_ACTOR_IS_MAPPED (actor))
     return;
 
+  CLUTTER_NOTE (GRABS,
+                "[device=%p sequence=%p] Cancelling actors on sequence grab due "
+                "to grab actor unmap",
+                entry->device, entry->sequence);
+
   remove_all_actors_from_chain (entry);
 }
 
@@ -4335,6 +4375,11 @@ static void
 sequence_grab_actor_destroyed (ClutterActor       *actor,
                                PointerDeviceEntry *entry)
 {
+  CLUTTER_NOTE (GRABS,
+                "[device=%p sequence=%p] Cancelling actors on sequence grab due "
+                "to grab actor destroy",
+                entry->device, entry->sequence);
+
   /* Remove only actors from the implicit grab when an actor in the implicit
    * grab chain goes away. The stage holds references to all the grabbed actions,
    * and we continue emitting sequence events to them until the sequence ends.
@@ -4362,6 +4407,10 @@ clutter_stage_maybe_lost_sequence_grab (ClutterStage         *self,
 
   if (!entry->press_count)
     return;
+
+  CLUTTER_NOTE (GRABS,
+                "[device=%p sequence=%p] Lost sequence grab",
+                device, sequence);
 
   for (i = 0; i < entry->event_emission_chain->len; i++)
     {
