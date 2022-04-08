@@ -3589,7 +3589,8 @@ clutter_stage_emit_crossing_event (ClutterStage       *self,
   if (entry->press_count)
     {
       emit_sequence_event_on_actions (event, entry->event_actions);
-      emit_event_on_actors (event, entry->event_actors);
+      if (!entry->claimed_by_gesture)
+        emit_event_on_actors (event, entry->event_actors);
     }
   else
     {
@@ -4496,4 +4497,6 @@ clutter_stage_set_sequence_claimed_by_gesture (ClutterStage         *self,
     return;
 
   entry->claimed_by_gesture = TRUE;
+
+  send_implicit_grab_crossing (self, entry, TRUE);
 }
