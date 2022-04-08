@@ -971,8 +971,6 @@ clutter_settings_class_init (ClutterSettingsClass *klass)
    * Sets the minimum duration for a press to be recognized as a long press
    * gesture. The duration is expressed in milliseconds.
    *
-   * See also #ClutterClickAction:long-press-duration.
-   *
    * Since: 1.8
    */
   obj_props[PROP_LONG_PRESS_DURATION] =
