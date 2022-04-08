@@ -105,6 +105,7 @@ typedef struct _PointerDeviceEntry
   unsigned int press_count;
   GPtrArray *event_actors;
   GPtrArray *event_actions;
+  gboolean claimed_by_gesture;
 } PointerDeviceEntry;
 
 struct _ClutterStagePrivate
@@ -3274,6 +3275,7 @@ clutter_stage_update_device_entry (ClutterStage         *self,
       entry->device = device;
       entry->sequence = sequence;
       entry->press_count = 0;
+      entry->claimed_by_gesture = FALSE;
       entry->event_actors = g_ptr_array_sized_new (32);
       g_ptr_array_set_free_func (entry->event_actors,
                                  (GDestroyNotify) g_object_unref);
@@ -3486,6 +3488,7 @@ static gboolean
 emit_discrete_event_on_actions (const ClutterEvent *event,
                                 GPtrArray          *actions)
 {
+  gboolean handled_event = FALSE;
   unsigned int i;
 
   for (i = 0; i < actions->len; i++)
@@ -3493,27 +3496,24 @@ emit_discrete_event_on_actions (const ClutterEvent *event,
       ClutterAction *action = g_ptr_array_index (actions, i);
 
       if (clutter_action_handle_event (action, event))
-        return TRUE;
+        handled_event = TRUE;
     }
 
-  return FALSE;
+  return handled_event;
 }
 
-static gboolean
+static void
 emit_sequence_event_on_actions (const ClutterEvent *event,
                                 GPtrArray          *actions)
 {
   unsigned int i;
-  gboolean handled = FALSE;
 
   for (i = 0; i < actions->len; i++)
     {
       ClutterAction *action = g_ptr_array_index (actions, i);
-      if (clutter_action_handle_event (action, event))
-        handled = TRUE;
-    }
 
-  return handled;
+      clutter_action_handle_event (action, event);
+    }
 }
 
 static void
@@ -4314,6 +4314,7 @@ release_sequence_grab (PointerDeviceEntry *entry)
   g_assert (entry->press_count == 1);
 
   entry->press_count = 0;
+  entry->claimed_by_gesture = FALSE;
   return TRUE;
 }
 
@@ -4447,7 +4448,8 @@ clutter_stage_emit_event (ClutterStage       *self,
 
   if (entry && entry->press_count)
     {
-      if (!emit_sequence_event_on_actions (event, entry->event_actions))
+      emit_sequence_event_on_actions (event, entry->event_actions);
+      if (!entry->claimed_by_gesture)
         emit_event_on_actors (event, entry->event_actors);
     }
   else
@@ -4473,4 +4475,25 @@ clutter_stage_emit_event (ClutterStage       *self,
       if (event->type == CLUTTER_BUTTON_RELEASE)
         send_implicit_grab_crossing (self, entry, FALSE);
     }
+}
+
+void
+clutter_stage_set_sequence_claimed_by_gesture (ClutterStage         *self,
+                                               ClutterInputDevice   *device,
+                                               ClutterEventSequence *sequence)
+{
+  ClutterStagePrivate *priv = self->priv;
+  PointerDeviceEntry *entry;
+
+  if (sequence != NULL)
+    entry = g_hash_table_lookup (priv->touch_sequences, sequence);
+  else
+    entry = g_hash_table_lookup (priv->pointer_devices, device);
+
+  g_assert (entry->press_count > 0);
+
+  if (entry->claimed_by_gesture)
+    return;
+
+  entry->claimed_by_gesture = TRUE;
 }

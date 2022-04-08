@@ -101,6 +101,7 @@
 #include "clutter-enum-types.h"
 #include "clutter-marshal.h"
 #include "clutter-private.h"
+#include "clutter-stage-private.h"
 
 #include <graphene.h>
 
@@ -594,7 +595,31 @@ set_state (ClutterGesture      *self,
   priv->state = new_state;
 
   if (new_state == CLUTTER_GESTURE_STATE_RECOGNIZING)
-    maybe_cancel_independent_gestures (self);
+    {
+      ClutterActor *actor;
+
+      g_assert (priv->points->len == priv->public_points->len);
+
+      actor = clutter_actor_meta_get_actor (CLUTTER_ACTOR_META (self));
+      if (actor)
+        {
+          ClutterStage *stage = CLUTTER_STAGE (clutter_actor_get_stage (actor));
+
+          if (stage)
+            {
+              unsigned int i;
+
+              for (i = 0; i < priv->points->len; i++)
+                {
+                  GesturePointPrivate *point = &g_array_index (priv->points, GesturePointPrivate, i);
+
+                  clutter_stage_set_sequence_claimed_by_gesture (stage, point->device, point->sequence);
+                }
+            }
+        }
+
+      maybe_cancel_independent_gestures (self);
+    }
 
   if (new_state == CLUTTER_GESTURE_STATE_CANCELLED ||
       new_state == CLUTTER_GESTURE_STATE_COMPLETED)

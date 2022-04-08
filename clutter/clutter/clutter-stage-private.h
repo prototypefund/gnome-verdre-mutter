@@ -169,6 +169,10 @@ void clutter_stage_maybe_lost_sequence_grab (ClutterStage         *self,
                                              ClutterInputDevice   *device,
                                              ClutterEventSequence *sequence);
 
+void clutter_stage_set_sequence_claimed_by_gesture (ClutterStage         *self,
+                                                    ClutterInputDevice   *device,
+                                                    ClutterEventSequence *sequence);
+
 G_END_DECLS
 
 #endif /* __CLUTTER_STAGE_PRIVATE_H__ */
