@@ -86,7 +86,7 @@
 #include "clutter-page-turn-effect.h"
 #include "clutter-paint-nodes.h"
 #include "clutter-paint-node.h"
-#include "clutter-pan-action.h"
+#include "clutter-pan-gesture.h"
 #include "clutter-path-constraint.h"
 #include "clutter-path.h"
 #include "clutter-property-transition.h"
