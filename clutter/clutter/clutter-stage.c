@@ -4500,3 +4500,21 @@ clutter_stage_emit_event (ClutterStage       *self,
       g_array_remove_range (entry->event_emission_chain, 0, entry->event_emission_chain->len);
     }
 }
+
+void
+clutter_stage_sequence_handled_by_action (ClutterStage         *self,
+                                          ClutterInputDevice   *device,
+                                          ClutterEventSequence *sequence)
+{
+  ClutterStagePrivate *priv = self->priv;
+  PointerDeviceEntry *entry;
+
+  if (sequence != NULL)
+    entry = g_hash_table_lookup (priv->touch_sequences, sequence);
+  else
+    entry = g_hash_table_lookup (priv->pointer_devices, device);
+
+  g_assert (entry->press_count > 0);
+
+  remove_all_actors_from_chain (entry);
+}
