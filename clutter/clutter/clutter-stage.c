@@ -4531,6 +4531,47 @@ clutter_stage_maybe_lost_sequence_grab (ClutterStage         *self,
   cleanup_sequence_grab (entry);
 }
 
+static void
+setup_sequence_actions (GArray             *emission_chain,
+                        const ClutterEvent *sequence_begin_event)
+{
+  ClutterInputDevice *device = clutter_event_get_device (sequence_begin_event);
+  ClutterEventSequence *sequence = clutter_event_get_event_sequence (sequence_begin_event);
+  unsigned int i, j;
+
+  for (i = 0; i < emission_chain->len; i++)
+    {
+      EventReceiver *receiver = &g_array_index (emission_chain, EventReceiver, i);
+
+      if (!receiver->action)
+        continue;
+
+      if (!clutter_action_should_handle_sequence (receiver->action, sequence_begin_event))
+        g_clear_object (&receiver->action);
+    }
+
+  for (i = 0; i < emission_chain->len; i++)
+    {
+      EventReceiver *receiver_1 = &g_array_index (emission_chain, EventReceiver, i);
+
+      if (!receiver_1->action)
+        continue;
+
+      for (j = i + 1; j < emission_chain->len; j++)
+        {
+          EventReceiver *receiver_2 = &g_array_index (emission_chain, EventReceiver, j);
+
+          if (!receiver_2->action)
+            continue;
+
+          clutter_action_setup_sequence_relationship (receiver_1->action,
+                                                      receiver_2->action,
+                                                      device,
+                                                      sequence);
+        }
+    }
+}
+
 void
 clutter_stage_emit_event (ClutterStage       *self,
                           const ClutterEvent *event)
@@ -4626,6 +4667,7 @@ clutter_stage_emit_event (ClutterStage       *self,
       entry->action_controls_crossings = FALSE;
 
       create_event_emission_chain (self, entry->event_emission_chain, seat_grab_actor, target_actor);
+      setup_sequence_actions (entry->event_emission_chain, event);
     }
 
   if (entry && entry->press_count)

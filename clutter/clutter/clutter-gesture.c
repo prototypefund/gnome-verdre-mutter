@@ -72,6 +72,15 @@
  * assume the state has changed after calling set_state(), and react to state
  * changes (for example to emit your own signals) by listening to the
  * state_changed() vfunc.
+ *
+ * ## Relationships of gestures
+ *
+ * By default, when multiple gestures try to recognize while sharing one or
+ * more points, the first gesture to move to RECOGNIZING wins, and implicitly
+ * moves all conflicting gestures to state CANCELLED. This behavior can be
+ * prohibited by using the clutter_gesture_can_not_cancel() API or by
+ * implementing the should_influence() or should_be_influenced_by() vfuncs
+ * in your #ClutterGesture subclass.
  */
 
 #include "clutter-build-config.h"
@@ -119,6 +128,12 @@ struct _ClutterGesturePrivate
   ClutterGestureState state;
 
   uint64_t allowed_device_types;
+
+  GHashTable *in_relationship_with;
+
+  GPtrArray *cancel_on_recognizing;
+
+  GHashTable *can_not_cancel;
 };
 
 enum
@@ -488,7 +503,25 @@ set_state (ClutterGesture      *self,
     }
 
   if (new_state == CLUTTER_GESTURE_STATE_WAITING)
-    g_array_set_size (priv->points, 0);
+    {
+      GHashTableIter iter;
+      ClutterGesture *other_gesture;
+
+      g_array_set_size (priv->points, 0);
+
+      g_hash_table_iter_init (&iter, priv->in_relationship_with);
+      while (g_hash_table_iter_next (&iter, (gpointer *) &other_gesture, NULL))
+        {
+          ClutterGesturePrivate *other_priv =
+            clutter_gesture_get_instance_private (other_gesture);
+
+          g_assert (g_hash_table_remove (other_priv->in_relationship_with, self));
+
+          g_hash_table_iter_remove (&iter);
+        }
+
+      g_ptr_array_set_size (priv->cancel_on_recognizing, 0);
+    }
 
   if (gesture_class->state_changed)
     gesture_class->state_changed (self, old_state, new_state);
@@ -510,6 +543,45 @@ maybe_move_to_waiting (ClutterGesture *self)
     set_state (self, CLUTTER_GESTURE_STATE_WAITING);
 }
 
+static void
+maybe_influence_other_gestures (ClutterGesture *self)
+{
+  ClutterGesturePrivate *priv =
+    clutter_gesture_get_instance_private (self);
+
+  if (priv->state == CLUTTER_GESTURE_STATE_RECOGNIZING ||
+      priv->state == CLUTTER_GESTURE_STATE_COMPLETED)
+    {
+      unsigned int len, i;
+
+      /* Clear the cancel_on_recognizing array now already so that other
+       * gestures cancelling us won't clear the array right underneath
+       * our feet.
+       */
+      len = priv->cancel_on_recognizing->len;
+      priv->cancel_on_recognizing->len = 0;
+
+      for (i = 0; i < len; i++)
+        {
+          ClutterGesture *other_gesture = priv->cancel_on_recognizing->pdata[i];
+          ClutterGesturePrivate *other_priv =
+            clutter_gesture_get_instance_private (other_gesture);
+
+          if (!g_hash_table_contains (priv->in_relationship_with, other_gesture))
+            continue;
+
+          g_assert (other_priv->state != CLUTTER_GESTURE_STATE_WAITING);
+
+          if (other_priv->state == CLUTTER_GESTURE_STATE_CANCELLED ||
+              other_priv->state == CLUTTER_GESTURE_STATE_COMPLETED)
+            continue;
+
+          set_state (other_gesture, CLUTTER_GESTURE_STATE_CANCELLED);
+          maybe_move_to_waiting (other_gesture);
+        }
+    }
+}
+
 void
 set_state_authoritative (ClutterGesture      *self,
                          ClutterGestureState  new_state)
@@ -527,11 +599,15 @@ set_state_authoritative (ClutterGesture      *self,
       else
         g_assert (priv->state == CLUTTER_GESTURE_STATE_CANCELLED);
 
+      maybe_influence_other_gestures (self);
       maybe_move_to_waiting (self);
       return;
     }
 
   set_state (self, new_state);
+  if (priv->state == CLUTTER_GESTURE_STATE_RECOGNIZING ||
+      priv->state == CLUTTER_GESTURE_STATE_CANCELLED)
+    maybe_influence_other_gestures (self);
   maybe_move_to_waiting (self);
 }
 
@@ -612,19 +688,17 @@ clutter_gesture_handle_event (ClutterAction      *action,
     return CLUTTER_EVENT_PROPAGATE;
 
   if ((point = find_point (self, device, sequence, &public_point)) == NULL)
-    {
-      if (event_type != CLUTTER_BUTTON_PRESS &&
-          event_type != CLUTTER_TOUCH_BEGIN)
-        return CLUTTER_EVENT_PROPAGATE;
-    }
+    return CLUTTER_EVENT_PROPAGATE;
 
-  if (point && event_type == CLUTTER_BUTTON_PRESS)
+  g_assert (priv->state != CLUTTER_GESTURE_STATE_WAITING);
+
+  if (event_type == CLUTTER_BUTTON_PRESS)
     {
       point->n_buttons_pressed++;
       if (point->n_buttons_pressed >= 2)
         return CLUTTER_EVENT_PROPAGATE;
     }
-  else if (point && event_type == CLUTTER_BUTTON_RELEASE)
+  else if (event_type == CLUTTER_BUTTON_RELEASE)
     {
       point->n_buttons_pressed--;
       if (point->n_buttons_pressed >= 1)
@@ -648,46 +722,21 @@ clutter_gesture_handle_event (ClutterAction      *action,
     {
     case CLUTTER_BUTTON_PRESS:
     case CLUTTER_TOUCH_BEGIN:
-      {
-        g_assert (point == NULL);
+      g_assert (public_point == NULL);
 
-        ClutterInputDevice *source_device =
-          clutter_event_get_source_device (event);
-        ClutterInputDeviceType device_type =
-          clutter_input_device_get_device_type (source_device);
+      g_array_set_size (priv->public_points, priv->public_points->len + 1);
+      public_point = &g_array_index (priv->public_points, ClutterGesturePoint, priv->public_points->len - 1);
 
-        /* Only allow new points coming from the same input device */
-        if (priv->points->len > 0 &&
-            g_array_index (priv->points, GesturePointPrivate, 0).source_device != source_device)
-          return CLUTTER_EVENT_PROPAGATE;
+      public_point->index = priv->point_indices;
+      priv->point_indices++;
 
-        if ((priv->allowed_device_types & DEVICE_TYPE_TO_BIT (device_type)) == 0)
-          return CLUTTER_EVENT_PROPAGATE;
+      update_point_from_event (point, public_point, event);
 
-        if (priv->state == CLUTTER_GESTURE_STATE_WAITING)
-          {
-            set_state_authoritative (self, CLUTTER_GESTURE_STATE_POSSIBLE);
-            if (priv->state != CLUTTER_GESTURE_STATE_POSSIBLE)
-              return CLUTTER_EVENT_PROPAGATE;
-          }
+      g_ptr_array_add (priv->emission_points, public_point);
+      if (gesture_class->points_began)
+        emit_points_vfunc (self, gesture_class->points_began, priv->emission_points);
 
-        point = register_point (self, event);
-        point->n_buttons_pressed = 1;
-
-        g_array_set_size (priv->public_points, priv->public_points->len + 1);
-        public_point = &g_array_index (priv->public_points, ClutterGesturePoint, priv->public_points->len - 1);
-
-        public_point->index = priv->point_indices;
-        priv->point_indices++;
-
-        update_point_from_event (point, public_point, event);
-
-        g_ptr_array_add (priv->emission_points, public_point);
-        if (gesture_class->points_began)
-          emit_points_vfunc (self, gesture_class->points_began, priv->emission_points);
-
-        g_ptr_array_set_size (priv->emission_points, 0);
-      }
+      g_ptr_array_set_size (priv->emission_points, 0);
       break;
 
     case CLUTTER_MOTION:
@@ -758,6 +807,145 @@ clutter_gesture_sequences_cancelled (ClutterAction        *action,
                                      size_t                n_sequences)
 {
   cancel_points_by_sequences (CLUTTER_GESTURE (action), device, sequences, n_sequences);
+}
+
+static gboolean
+clutter_gesture_should_handle_sequence (ClutterAction      *action,
+                                        const ClutterEvent *event)
+{
+  ClutterGesture *self = CLUTTER_GESTURE (action);
+  ClutterGesturePrivate *priv = clutter_gesture_get_instance_private (self);
+  ClutterInputDevice *source_device = clutter_event_get_source_device (event);
+
+  if (priv->state == CLUTTER_GESTURE_STATE_CANCELLED ||
+      priv->state == CLUTTER_GESTURE_STATE_COMPLETED)
+    return FALSE;
+
+  if (priv->points->len > 0)
+    {
+      /* Only allow new points coming from the same input device */
+      if (g_array_index (priv->points, GesturePointPrivate, 0).source_device != source_device)
+        return FALSE;
+    }
+  else
+    {
+      ClutterInputDeviceType device_type =
+        clutter_input_device_get_device_type (source_device);
+
+      if ((priv->allowed_device_types & DEVICE_TYPE_TO_BIT (device_type)) == 0)
+        return FALSE;
+
+      if (priv->state == CLUTTER_GESTURE_STATE_WAITING)
+        {
+          set_state_authoritative (self, CLUTTER_GESTURE_STATE_POSSIBLE);
+          if (priv->state != CLUTTER_GESTURE_STATE_POSSIBLE)
+            return FALSE;
+        }
+    }
+
+  register_point (self, event);
+
+  return TRUE;
+}
+
+static void
+setup_influence_on_other_gesture (ClutterGesture *self,
+                                  ClutterGesture *other_gesture,
+                                  gboolean       *cancel_other_gesture_on_recognizing)
+{
+  ClutterGesturePrivate *priv = clutter_gesture_get_instance_private (self);
+  ClutterGestureClass *gesture_class = CLUTTER_GESTURE_GET_CLASS (self);
+  ClutterGestureClass *other_gesture_class = CLUTTER_GESTURE_GET_CLASS (other_gesture);
+
+  /* The default: We cancel other gestures when we recognize */
+  gboolean cancel = TRUE;
+
+  /* First check with the implementation specific APIs */
+  if (gesture_class->should_influence)
+    gesture_class->should_influence (self, other_gesture, &cancel);
+
+  if (other_gesture_class->should_be_influenced_by)
+    other_gesture_class->should_be_influenced_by (other_gesture, self, &cancel);
+
+  /* Then apply overrides made using the public methods */
+  if (priv->can_not_cancel &&
+      g_hash_table_contains (priv->can_not_cancel, other_gesture))
+    cancel = FALSE;
+
+  *cancel_other_gesture_on_recognizing = cancel;
+}
+
+static int
+clutter_gesture_setup_sequence_relationship (ClutterAction        *action_1,
+                                             ClutterAction        *action_2,
+                                             ClutterInputDevice   *device,
+                                             ClutterEventSequence *sequence)
+{
+  if (!CLUTTER_IS_GESTURE (action_1) || !CLUTTER_IS_GESTURE (action_2))
+    return 0;
+
+  ClutterGesture *gesture_1 = CLUTTER_GESTURE (action_1);
+  ClutterGesture *gesture_2 = CLUTTER_GESTURE (action_2);
+  ClutterGesturePrivate *priv_1 = clutter_gesture_get_instance_private (gesture_1);
+  ClutterGesturePrivate *priv_2 = clutter_gesture_get_instance_private (gesture_2);
+  gboolean cancel_1_on_recognizing;
+  gboolean cancel_2_on_recognizing;
+
+  /* When CANCELLED or COMPLETED, we refuse to accept new points in
+   * should_handle_sequence(). Also when WAITING it's impossible to have points,
+   * that leaves only two states, POSSIBLE and RECOGNIZING.
+   */
+  g_assert (priv_1->state == CLUTTER_GESTURE_STATE_POSSIBLE ||
+            priv_1->state == CLUTTER_GESTURE_STATE_RECOGNIZING);
+  g_assert (priv_2->state == CLUTTER_GESTURE_STATE_POSSIBLE ||
+            priv_2->state == CLUTTER_GESTURE_STATE_RECOGNIZING);
+
+  g_assert (find_point (gesture_1, device, sequence, NULL) != NULL &&
+            find_point (gesture_2, device, sequence, NULL) != NULL);
+
+  /* If gesture 1 knows gesture 2 (this implies vice-versa), everything's
+   * figured out already, we won't negotiate again for any new shared sequences!
+   */
+  if (g_hash_table_contains (priv_1->in_relationship_with, gesture_2))
+    {
+      cancel_1_on_recognizing = g_ptr_array_find (priv_2->cancel_on_recognizing, gesture_1, NULL);
+      cancel_2_on_recognizing = g_ptr_array_find (priv_1->cancel_on_recognizing, gesture_2, NULL);
+    }
+  else
+    {
+      setup_influence_on_other_gesture (gesture_1, gesture_2,
+                                        &cancel_2_on_recognizing);
+
+      setup_influence_on_other_gesture (gesture_2, gesture_1,
+                                        &cancel_1_on_recognizing);
+
+      CLUTTER_NOTE (GESTURES,
+                    "Setting up relation between \"<%s> [<%s>:%p]\" (cancel: %d) "
+                    "and \"<%s> [<%s>:%p]\" (cancel: %d)",
+                    clutter_actor_meta_get_name (CLUTTER_ACTOR_META (gesture_1)),
+                    G_OBJECT_TYPE_NAME (gesture_1), gesture_1,
+                    cancel_1_on_recognizing,
+                    clutter_actor_meta_get_name (CLUTTER_ACTOR_META (gesture_2)),
+                    G_OBJECT_TYPE_NAME (gesture_2), gesture_2,
+                    cancel_2_on_recognizing);
+
+      g_hash_table_add (priv_1->in_relationship_with, g_object_ref (gesture_2));
+      g_hash_table_add (priv_2->in_relationship_with, g_object_ref (gesture_1));
+
+      if (cancel_2_on_recognizing)
+        g_ptr_array_add (priv_1->cancel_on_recognizing, gesture_2);
+
+      if (cancel_1_on_recognizing)
+        g_ptr_array_add (priv_2->cancel_on_recognizing, gesture_1);
+    }
+
+  if (cancel_2_on_recognizing && !cancel_1_on_recognizing)
+    return -1;
+
+  if (!cancel_2_on_recognizing && cancel_1_on_recognizing)
+    return 1;
+
+  return 0;
 }
 
 static void
@@ -831,6 +1019,28 @@ clutter_gesture_get_property (GObject      *gobject,
 }
 
 static void
+other_gesture_disposed (gpointer user_data,
+                        GObject    *finalized_gesture)
+{
+  GHashTable *hashtable = user_data;
+
+  g_hash_table_remove (hashtable, finalized_gesture);
+}
+
+static void
+destroy_weak_ref_hashtable (GHashTable *hashtable)
+{
+  GHashTableIter iter;
+  GObject *key;
+
+  g_hash_table_iter_init (&iter, hashtable);
+  while (g_hash_table_iter_next (&iter, (gpointer *) &key, NULL))
+    g_object_weak_unref (key, other_gesture_disposed, hashtable);
+
+  g_hash_table_destroy (hashtable);
+}
+
+static void
 clutter_gesture_finalize (GObject *gobject)
 {
   ClutterGesture *self = CLUTTER_GESTURE (gobject);
@@ -851,6 +1061,15 @@ clutter_gesture_finalize (GObject *gobject)
   g_array_unref (priv->points);
   g_array_unref (priv->public_points);
 
+  g_assert (g_hash_table_size (priv->in_relationship_with) == 0);
+  g_hash_table_destroy (priv->in_relationship_with);
+
+  g_assert (priv->cancel_on_recognizing->len == 0);
+  g_ptr_array_free (priv->cancel_on_recognizing, TRUE);
+
+  if (priv->can_not_cancel)
+    destroy_weak_ref_hashtable (priv->can_not_cancel);
+
   G_OBJECT_CLASS (clutter_gesture_parent_class)->finalize (gobject);
 }
 
@@ -865,6 +1084,8 @@ clutter_gesture_class_init (ClutterGestureClass *klass)
 
   action_class->handle_event = clutter_gesture_handle_event;
   action_class->sequences_cancelled = clutter_gesture_sequences_cancelled;
+  action_class->should_handle_sequence = clutter_gesture_should_handle_sequence;
+  action_class->setup_sequence_relationship = clutter_gesture_setup_sequence_relationship;
 
   meta_class->set_actor = clutter_gesture_set_actor;
   meta_class->set_enabled = clutter_gesture_set_enabled;
@@ -932,6 +1153,12 @@ clutter_gesture_init (ClutterGesture *self)
     DEVICE_TYPE_TO_BIT (CLUTTER_TOUCHPAD_DEVICE) |
     DEVICE_TYPE_TO_BIT (CLUTTER_TOUCHSCREEN_DEVICE) |
     DEVICE_TYPE_TO_BIT (CLUTTER_TABLET_DEVICE);
+
+  priv->in_relationship_with = g_hash_table_new_full (NULL, NULL, (GDestroyNotify) g_object_unref, NULL);
+
+  priv->cancel_on_recognizing = g_ptr_array_new ();
+
+  priv->can_not_cancel = NULL;
 }
 
 /**
@@ -1081,4 +1308,40 @@ clutter_gesture_set_allowed_device_types (ClutterGesture         *self,
 
       priv->allowed_device_types |= DEVICE_TYPE_TO_BIT (device_type);
     }
+}
+
+/**
+ * clutter_gesture_can_not_cancel:
+ * @self: a #ClutterGesture
+ * @other_gesture: the other #ClutterGesture
+ *
+ * In case @self and @other_gesture are operating on the same points, calling
+ * this function will make sure that @self does not cancel @other_gesture
+ * when @self moves to state RECOGNIZING.
+ *
+ * To allow two gestures to recognize simultaneously using the same set of
+ * points (for example a zoom and a rotate gesture on the same actor), call
+ * clutter_gesture_can_not_cancel() twice, so that both gestures can not
+ * cancel each other.
+ */
+void
+clutter_gesture_can_not_cancel (ClutterGesture *self,
+                                ClutterGesture *other_gesture)
+{
+  ClutterGesturePrivate *priv;
+
+  g_return_if_fail (CLUTTER_IS_GESTURE (self));
+  g_return_if_fail (CLUTTER_IS_GESTURE (other_gesture));
+
+  priv = clutter_gesture_get_instance_private (self);
+
+  if (!priv->can_not_cancel)
+    priv->can_not_cancel = g_hash_table_new (NULL, NULL);
+
+  if (!g_hash_table_add (priv->can_not_cancel, other_gesture))
+    return;
+
+  g_object_weak_ref (G_OBJECT (other_gesture),
+                     (GWeakNotify) other_gesture_disposed,
+                     priv->can_not_cancel);
 }
