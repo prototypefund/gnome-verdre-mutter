@@ -71,6 +71,8 @@ typedef struct _ClutterAction                   ClutterAction;
 typedef struct _ClutterConstraint               ClutterConstraint;
 typedef struct _ClutterEffect                   ClutterEffect;
 
+typedef struct _ClutterGesturePoint             ClutterGesturePoint;
+
 typedef struct _ClutterPath                     ClutterPath;
 typedef struct _ClutterPathNode                 ClutterPathNode;
 
@@ -413,6 +415,20 @@ typedef gboolean (* ClutterProgressFunc) (const GValue *a,
 CLUTTER_EXPORT
 void clutter_interval_register_progress_func (GType               value_type,
                                               ClutterProgressFunc func);
+
+struct _ClutterGesturePoint
+{
+  unsigned int index;
+
+  const ClutterEvent *latest_event;
+  int64_t event_time;
+
+  graphene_point_t begin_coords;
+  graphene_point_t move_coords;
+  graphene_point_t end_coords;
+  graphene_point_t previous_coords;
+  graphene_point_t latest_coords;
+};
 
 G_END_DECLS
 
