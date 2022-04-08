@@ -118,3 +118,28 @@ clutter_action_sequences_cancelled (ClutterAction        *action,
   if (action_class->sequences_cancelled)
     action_class->sequences_cancelled (action, device, sequences, n_sequences);
 }
+
+gboolean
+clutter_action_should_handle_sequence (ClutterAction      *self,
+                                       const ClutterEvent *event)
+{
+  ClutterActionClass *action_class = CLUTTER_ACTION_GET_CLASS (self);
+
+  if (action_class->should_handle_sequence)
+    return action_class->should_handle_sequence (self, event);
+
+  return TRUE;
+}
+
+int
+clutter_action_setup_sequence_relationship (ClutterAction        *action_1,
+                                            ClutterAction        *action_2,
+                                            const ClutterEvent *event)
+{
+  ClutterActionClass *action_class = CLUTTER_ACTION_GET_CLASS (action_1);
+
+  if (action_class->setup_sequence_relationship)
+    return action_class->setup_sequence_relationship (action_1, action_2, event);
+
+  return 0;
+}

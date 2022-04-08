@@ -102,6 +102,36 @@ struct _ClutterGestureClass
                            ClutterActor              *related_actor);
 
   gboolean (* may_recognize) (ClutterGesture *self);
+
+  /**
+   * ClutterGestureClass::should_influence:
+   * @self: the #ClutterGesture
+   * @other_gesture: the #ClutterGesture that should be influenced
+   * @cancel_on_recognizing: (inout): whether to cancel @other_gesture
+   *   when @self recognizes
+   *
+   * This virtual function is called to request whether @self should
+   * influence @other_gesture, i.e. whether @other_gesture should be moved
+   * to state CANCELLED when @self enters RECOGNIZING.
+   */
+  void (* should_influence) (ClutterGesture *self,
+                             ClutterGesture *other_gesture,
+                             gboolean       *cancel_on_recognizing);
+
+  /**
+   * ClutterGestureClass::should_be_influenced_by:
+   * @self: the #ClutterGesture
+   * @other_gesture: the influencing #ClutterGesture
+   * @cancelled_on_recognizing: (inout): whether @self should be cancelled
+   *   when @other_gesture recognizes
+   *
+   * This virtual function is called to request whether @other_gesture should
+   * influence @self, i.e. whether @self should be moved to state
+   * CANCELLED when @other_gesture enters RECOGNIZING.
+   */
+  void (* should_be_influenced_by) (ClutterGesture *self,
+                                    ClutterGesture *other_gesture,
+                                    gboolean       *cancelled_on_recognizing);
 };
 
 CLUTTER_EXPORT
@@ -122,5 +152,9 @@ CLUTTER_EXPORT
 void clutter_gesture_set_allowed_device_types (ClutterGesture         *self,
                                                ClutterInputDeviceType *allowed_device_types,
                                                size_t                  n_device_types);
+
+CLUTTER_EXPORT
+void clutter_gesture_can_not_cancel (ClutterGesture *self,
+                                     ClutterGesture *other_gesture);
 
 #endif /* __CLUTTER_GESTURE_H__ */

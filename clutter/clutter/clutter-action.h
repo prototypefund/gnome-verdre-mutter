@@ -60,6 +60,12 @@ struct _ClutterActionClass
                                 ClutterEventSequence *sequences,
                                 size_t                n_sequences);
 
+  gboolean (* should_handle_sequence) (ClutterAction      *self,
+                                       const ClutterEvent *event);
+
+  int (* setup_sequence_relationship) (ClutterAction      *action_1,
+                                       ClutterAction      *action_2,
+                                       const ClutterEvent *event);
 
   void (* _clutter_action1) (void);
   void (* _clutter_action2) (void);

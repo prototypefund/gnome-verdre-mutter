@@ -45,6 +45,13 @@ void clutter_action_sequences_cancelled (ClutterAction        *action,
                                          ClutterEventSequence *sequences,
                                          size_t                n_sequences);
 
+gboolean clutter_action_should_handle_sequence (ClutterAction      *self,
+                                                const ClutterEvent *event);
+
+int clutter_action_setup_sequence_relationship (ClutterAction      *action_1,
+                                                ClutterAction      *action_2,
+                                                const ClutterEvent *event);
+
 G_END_DECLS
 
 #endif /* CLUTTER_ACTION_PRIVATE_H */

@@ -3476,6 +3476,79 @@ emit_sequence_event_on_actions (const ClutterEvent *event,
 }
 
 static void
+maybe_move_action_ahead (GPtrArray     *arr,
+                         ClutterAction *action,
+                         ClutterAction *move_ahead_of)
+{
+  unsigned int action_index;
+  unsigned int move_ahead_of_index;
+
+  g_ptr_array_find (arr, action, &action_index);
+  g_ptr_array_find (arr, move_ahead_of, &move_ahead_of_index);
+
+  if (action_index > move_ahead_of_index)
+    {
+      g_ptr_array_steal_index (arr, action_index);
+      g_ptr_array_insert (arr, move_ahead_of_index, action);
+    }
+}
+
+static void
+setup_sequence_actions (GPtrArray          *actions,
+                        const ClutterEvent *sequence_begin_event)
+{
+  unsigned int alloc_size = sizeof (*actions->pdata) * actions->len;
+  ClutterAction **copy;
+  unsigned int i, new_len, j;
+
+  if (alloc_size < 512)
+    copy = g_alloca (alloc_size);
+  else
+    copy = g_malloc (alloc_size);
+
+  new_len = 0;
+  for (i = 0; i < actions->len; i++)
+    {
+      ClutterAction *action = g_ptr_array_index (actions, i);
+
+      if (!clutter_action_should_handle_sequence (action, sequence_begin_event))
+        {
+          g_ptr_array_remove_index (actions, i);
+          i--;
+          continue;
+        }
+
+      copy[new_len++] = action;
+    }
+
+  for (i = 0; i < new_len; i++)
+    {
+      ClutterAction *action_1 = copy[i];
+
+      for (j = i + 1; j < new_len; j++)
+        {
+          ClutterAction *action_2 = copy[j];
+          int res;
+
+          res = clutter_action_setup_sequence_relationship (action_1, action_2, sequence_begin_event);
+
+          /* In theory what we have here is a full blown dependency graph
+           * that we'd have to resolve. Let's try to get away with a single
+           * iteration over the array and moving things ahead of each other
+           * for now.
+           */
+          if (res < 0)
+            maybe_move_action_ahead (actions, action_1, action_2);
+          else if (res > 0)
+            maybe_move_action_ahead (actions, action_2, action_1);
+        }
+    }
+
+  if (alloc_size >= 512)
+    g_free (copy);
+}
+
+static void
 clutter_stage_emit_crossing_event (ClutterStage       *self,
                                    const ClutterEvent *event,
                                    ClutterActor       *source_actor,
@@ -4317,6 +4390,7 @@ clutter_stage_emit_event (ClutterStage       *self,
       clutter_actor_collect_event_actions (target_actor,
                                            seat_grab_actor,
                                            entry->event_actions);
+      setup_sequence_actions (entry->event_actions, event);
     }
 
   if (entry && entry->sequence_grabbed)
