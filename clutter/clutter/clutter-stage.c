@@ -63,6 +63,7 @@
 #include "clutter-paint-volume-private.h"
 #include "clutter-pick-context-private.h"
 #include "clutter-private.h"
+#include "clutter-recognizing-gestures-tracker-private.h"
 #include "clutter-seat-private.h"
 #include "clutter-stage-manager-private.h"
 #include "clutter-stage-private.h"
@@ -124,6 +125,8 @@ struct _ClutterStagePrivate
 
   GQueue *event_queue;
   GPtrArray *cur_event_actions;
+
+  ClutterGesture *recognizing_gestures_tracker;
 
   GArray *paint_volume_stack;
 
@@ -1219,6 +1222,8 @@ clutter_stage_dispose (GObject *object)
   stage_manager = clutter_stage_manager_get_default ();
   _clutter_stage_manager_remove_stage (stage_manager, stage);
 
+  g_object_unref (priv->recognizing_gestures_tracker);
+
   g_hash_table_remove_all (priv->pointer_devices);
   g_hash_table_remove_all (priv->touch_sequences);
 
@@ -1591,6 +1596,12 @@ clutter_stage_init (ClutterStage *self)
   priv->cur_event_actions = g_ptr_array_sized_new (32);
   g_ptr_array_set_free_func (priv->cur_event_actions,
                              (GDestroyNotify) g_object_unref);
+
+  priv->recognizing_gestures_tracker =
+    g_object_ref_sink (
+      g_object_new (CLUTTER_TYPE_RECOGNIZING_GESTURES_TRACKER,
+                    "name", "Stage dummy",
+                    NULL));
 
   priv->pointer_devices =
     g_hash_table_new_full (NULL, NULL,
@@ -3448,6 +3459,7 @@ emit_discrete_event_on_actions (const ClutterEvent *event,
                                 ClutterActor       *crossing_source_actor,
                                 GPtrArray          *actions)
 {
+  gboolean handled_event = FALSE;
   unsigned int i;
 
   for (i = 0; i < actions->len; i++)
@@ -3455,10 +3467,10 @@ emit_discrete_event_on_actions (const ClutterEvent *event,
       ClutterAction *action = g_ptr_array_index (actions, i);
 
       if (clutter_action_handle_event (action, event, crossing_source_actor))
-        return TRUE;
+        handled_event = TRUE;
     }
 
-  return FALSE;
+  return handled_event;
 }
 
 static void
@@ -4390,13 +4402,16 @@ clutter_stage_emit_event (ClutterStage       *self,
       clutter_actor_collect_event_actions (target_actor,
                                            seat_grab_actor,
                                            entry->event_actions);
+      g_ptr_array_add (entry->event_actions,
+                       g_object_ref (priv->recognizing_gestures_tracker));
       setup_sequence_actions (entry->event_actions, event);
     }
 
   if (entry && entry->sequence_grabbed)
     {
       emit_sequence_event_on_actions (event, NULL, entry->event_actions);
-      _clutter_actor_handle_event (target_actor, seat_grab_actor, event);
+      if (clutter_gesture_get_state (priv->recognizing_gestures_tracker) == CLUTTER_GESTURE_STATE_POSSIBLE)
+        _clutter_actor_handle_event (target_actor, seat_grab_actor, event);
 
       if (is_sequence_end && release_sequence_grab (entry))
         g_ptr_array_remove_range (entry->event_actions, 0, entry->event_actions->len);
