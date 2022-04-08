@@ -1305,6 +1305,82 @@ clutter_stage_paint (ClutterActor        *actor,
     }
 }
 
+static ClutterEvent *
+create_crossing_event (ClutterStage         *stage,
+                       ClutterInputDevice   *device,
+                       ClutterEventSequence *sequence,
+                       ClutterEventType      event_type,
+                       ClutterEventFlags     flags,
+                       ClutterActor         *source,
+                       ClutterActor         *related,
+                       graphene_point_t      coords,
+                       uint32_t              time_ms)
+{
+  ClutterEvent *event;
+
+  event = clutter_event_new (event_type);
+  event->crossing.time = time_ms;
+  event->crossing.flags = flags;
+  event->crossing.stage = stage;
+  event->crossing.x = coords.x;
+  event->crossing.y = coords.y;
+  event->crossing.related = related;
+  event->crossing.sequence = sequence;
+  clutter_event_set_device (event, device);
+
+  return event;
+}
+
+static void
+sync_sequence_gesture_recognizing (ClutterStage       *self,
+                                   PointerDeviceEntry *entry,
+                                   gboolean            recognizing)
+{
+  ClutterStagePrivate *priv = self->priv;
+  ClutterEvent *crossing;
+
+  crossing = create_crossing_event (self,
+                                    entry->device,
+                                    entry->sequence,
+                                    recognizing ? CLUTTER_LEAVE : CLUTTER_ENTER,
+                                    0,
+                                    entry->current_actor,
+                                    NULL,
+                                    entry->coords,
+                                    CLUTTER_CURRENT_TIME);
+
+  _clutter_actor_handle_event (entry->current_actor,
+                               priv->topmost_grab ? priv->topmost_grab->actor : NULL,
+                               crossing);
+}
+
+static void
+on_recognizing_gestures_tracker_notify_state (ClutterGesture *gesture,
+                                              GParamSpec     *pspec,
+                                              ClutterStage   *self)
+{
+  ClutterStagePrivate *priv = self->priv;
+  GHashTableIter iter;
+  PointerDeviceEntry *entry;
+
+  if (clutter_gesture_get_state (gesture) != CLUTTER_GESTURE_STATE_CANCELLED)
+    return;
+
+  g_hash_table_iter_init (&iter, priv->pointer_devices);
+  while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &entry))
+    {
+      if (entry->sequence_grabbed)
+        sync_sequence_gesture_recognizing (self, entry, TRUE);
+    }
+
+  g_hash_table_iter_init (&iter, priv->touch_sequences);
+  while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &entry))
+    {
+      if (entry->sequence_grabbed)
+        sync_sequence_gesture_recognizing (self, entry, TRUE);
+    }
+}
+
 static void
 clutter_stage_class_init (ClutterStageClass *klass)
 {
@@ -1602,6 +1678,8 @@ clutter_stage_init (ClutterStage *self)
       g_object_new (CLUTTER_TYPE_RECOGNIZING_GESTURES_TRACKER,
                     "name", "Stage dummy",
                     NULL));
+  g_signal_connect (priv->recognizing_gestures_tracker, "notify::state",
+                    G_CALLBACK (on_recognizing_gestures_tracker_notify_state), self);
 
   priv->pointer_devices =
     g_hash_table_new_full (NULL, NULL,
@@ -3428,32 +3506,6 @@ find_common_root_actor (ClutterStage *stage,
   return CLUTTER_ACTOR (stage);
 }
 
-static ClutterEvent *
-create_crossing_event (ClutterStage         *stage,
-                       ClutterInputDevice   *device,
-                       ClutterEventSequence *sequence,
-                       ClutterEventType      event_type,
-                       ClutterEventFlags     flags,
-                       ClutterActor         *source,
-                       ClutterActor         *related,
-                       graphene_point_t      coords,
-                       uint32_t              time_ms)
-{
-  ClutterEvent *event;
-
-  event = clutter_event_new (event_type);
-  event->crossing.time = time_ms;
-  event->crossing.flags = flags;
-  event->crossing.stage = stage;
-  event->crossing.x = coords.x;
-  event->crossing.y = coords.y;
-  event->crossing.related = related;
-  event->crossing.sequence = sequence;
-  clutter_event_set_device (event, device);
-
-  return event;
-}
-
 static gboolean
 emit_discrete_event_on_actions (const ClutterEvent *event,
                                 ClutterActor       *crossing_source_actor,
@@ -3582,7 +3634,8 @@ clutter_stage_emit_crossing_event (ClutterStage       *self,
   if (entry->sequence_grabbed)
     {
       emit_sequence_event_on_actions (event, source_actor, entry->event_actions);
-      _clutter_actor_handle_event (deepmost, topmost, event);
+      if (clutter_gesture_get_state (priv->recognizing_gestures_tracker) == CLUTTER_GESTURE_STATE_POSSIBLE)
+        _clutter_actor_handle_event (deepmost, topmost, event);
     }
   else
     {
@@ -4405,6 +4458,15 @@ clutter_stage_emit_event (ClutterStage       *self,
       g_ptr_array_add (entry->event_actions,
                        g_object_ref (priv->recognizing_gestures_tracker));
       setup_sequence_actions (entry->event_actions, event);
+
+      /* If the tracker was unable to move to POSSIBLE, it just remains in
+       * state WAITING without moving through CANCELLED (most likely an
+       * already recognizing gesture prevented us from entering POSSIBLE).
+       * In this case do the same thing that we'd do when moving to CANCELLED
+       * and emit a LEAVE crossing for the new entry.
+       */
+      if (clutter_gesture_get_state (priv->recognizing_gestures_tracker) != CLUTTER_GESTURE_STATE_POSSIBLE)
+        sync_sequence_gesture_recognizing (self, entry, TRUE);
     }
 
   if (entry && entry->sequence_grabbed)
@@ -4414,7 +4476,14 @@ clutter_stage_emit_event (ClutterStage       *self,
         _clutter_actor_handle_event (target_actor, seat_grab_actor, event);
 
       if (is_sequence_end && release_sequence_grab (entry))
-        g_ptr_array_remove_range (entry->event_actions, 0, entry->event_actions->len);
+        {
+          g_ptr_array_remove_range (entry->event_actions, 0, entry->event_actions->len);
+
+          /* Sync recognizing state after the sequence grab for mice */
+          if (clutter_gesture_get_state (priv->recognizing_gestures_tracker) != CLUTTER_GESTURE_STATE_POSSIBLE &&
+              event->type == CLUTTER_BUTTON_RELEASE)
+            sync_sequence_gesture_recognizing (self, entry, FALSE);
+        }
     }
   else
     {
