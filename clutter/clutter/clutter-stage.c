@@ -3517,6 +3517,37 @@ emit_sequence_event_on_actions (const ClutterEvent *event,
 }
 
 static void
+setup_sequence_actions (GPtrArray          *actions,
+                        const ClutterEvent *sequence_begin_event)
+{
+  ClutterInputDevice *device = clutter_event_get_device (sequence_begin_event);
+  ClutterEventSequence *sequence = clutter_event_get_event_sequence (sequence_begin_event);
+  unsigned int i, j;
+
+  for (i = 0; i < actions->len; i++)
+    {
+      ClutterAction *action_1 = g_ptr_array_index (actions, i);
+
+      if (!clutter_action_should_handle_sequence (action_1, sequence_begin_event))
+        {
+          g_ptr_array_remove_index (actions, i);
+          i--;
+        }
+    }
+
+  for (i = 0; i < actions->len; i++)
+    {
+      ClutterAction *action_1 = g_ptr_array_index (actions, i);
+
+      for (j = i + 1; j < actions->len; j++)
+        {
+          ClutterAction *action_2 = g_ptr_array_index (actions, j);
+          clutter_action_setup_sequence_relationship (action_1, action_2, device, sequence);
+        }
+    }
+}
+
+static void
 emit_event_on_actors (const ClutterEvent *event,
                       GPtrArray          *actors)
 {
@@ -4411,6 +4442,7 @@ clutter_stage_emit_event (ClutterStage       *self,
     {
       clutter_actor_collect_event_actors (seat_grab_actor, target_actor, entry->event_actors);
       collect_actions_from_event_actors (entry->event_actions, entry->event_actors);
+      setup_sequence_actions (entry->event_actions, event);
     }
 
   if (entry && entry->press_count)
