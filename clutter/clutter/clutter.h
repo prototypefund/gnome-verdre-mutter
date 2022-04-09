@@ -90,14 +90,12 @@
 #include "clutter-path-constraint.h"
 #include "clutter-path.h"
 #include "clutter-property-transition.h"
-#include "clutter-rotate-action.h"
 #include "clutter-scriptable.h"
 #include "clutter-script.h"
 #include "clutter-scroll-actor.h"
 #include "clutter-settings.h"
 #include "clutter-shader-effect.h"
 #include "clutter-shader-types.h"
-#include "clutter-swipe-action.h"
 #include "clutter-snap-constraint.h"
 #include "clutter-stage.h"
 #include "clutter-stage-manager.h"
@@ -109,7 +107,6 @@
 #include "clutter-transition.h"
 #include "clutter-units.h"
 #include "clutter-virtual-input-device.h"
-#include "clutter-zoom-action.h"
 
 #include "clutter-deprecated.h"
 
