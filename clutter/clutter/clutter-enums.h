@@ -83,23 +83,6 @@ typedef enum /*< prefix=CLUTTER >*/
 } ClutterRotateAxis;
 
 /**
- * ClutterRotateDirection:
- * @CLUTTER_ROTATE_CW: Clockwise rotation
- * @CLUTTER_ROTATE_CCW: Counter-clockwise rotation
- *
- * Direction of a rotation.
- *
- * Since: 0.4
- *
- * Deprecated: 1.22
- */
-typedef enum /*< prefix=CLUTTER_ROTATE >*/
-{
-  CLUTTER_ROTATE_CW,
-  CLUTTER_ROTATE_CCW
-} ClutterRotateDirection;
-
-/**
  * ClutterRequestMode:
  * @CLUTTER_REQUEST_HEIGHT_FOR_WIDTH: Height for width requests
  * @CLUTTER_REQUEST_WIDTH_FOR_HEIGHT: Width for height requests
@@ -1083,25 +1066,6 @@ typedef enum
   CLUTTER_PICK_REACTIVE,
   CLUTTER_PICK_ALL
 } ClutterPickMode;
-
-/**
- * ClutterSwipeDirection:
- * @CLUTTER_SWIPE_DIRECTION_UP: Upwards swipe gesture
- * @CLUTTER_SWIPE_DIRECTION_DOWN: Downwards swipe gesture
- * @CLUTTER_SWIPE_DIRECTION_LEFT: Leftwards swipe gesture
- * @CLUTTER_SWIPE_DIRECTION_RIGHT: Rightwards swipe gesture
- *
- * The main direction of the swipe gesture
- *
- * Since: 1.8
- */
-typedef enum /*< prefix=CLUTTER_SWIPE_DIRECTION >*/
-{
-  CLUTTER_SWIPE_DIRECTION_UP    = 1 << 0,
-  CLUTTER_SWIPE_DIRECTION_DOWN  = 1 << 1,
-  CLUTTER_SWIPE_DIRECTION_LEFT  = 1 << 2,
-  CLUTTER_SWIPE_DIRECTION_RIGHT = 1 << 3
-} ClutterSwipeDirection;
 
 /**
  * ClutterPanAxis:
