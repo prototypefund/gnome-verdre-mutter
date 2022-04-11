@@ -309,6 +309,27 @@ state_changed (ClutterGesture      *gesture,
 }
 
 static void
+should_influence (ClutterGesture *gesture,
+                  ClutterGesture *other_gesture,
+                  gboolean       *cancel_on_recognizing,
+                  gboolean       *inhibit_until_cancelled)
+{
+  if (CLUTTER_IS_CLICK_GESTURE (other_gesture))
+    {
+      ClutterClickGesturePrivate *priv =
+        clutter_click_gesture_get_instance_private (CLUTTER_CLICK_GESTURE (gesture));
+      ClutterClickGesturePrivate *other_priv =
+        clutter_click_gesture_get_instance_private (CLUTTER_CLICK_GESTURE (other_gesture));
+
+      if (other_priv->n_clicks_required > priv->n_clicks_required)
+        {
+          *cancel_on_recognizing = TRUE;
+          *inhibit_until_cancelled = TRUE;
+        }
+    }
+}
+
+static void
 clutter_click_gesture_set_property (GObject      *gobject,
                                    unsigned int  prop_id,
                                    const GValue *value,
@@ -375,6 +396,7 @@ clutter_click_gesture_class_init (ClutterClickGestureClass *klass)
   gesture_class->points_cancelled = points_cancelled;
   gesture_class->crossing_event = crossing_event;
   gesture_class->state_changed = state_changed;
+  gesture_class->should_influence = should_influence;
 
   /**
    * ClutterClickGesture:cancel-threshold:
