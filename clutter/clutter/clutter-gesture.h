@@ -132,6 +132,30 @@ struct _ClutterGestureClass
   void (* should_be_influenced_by) (ClutterGesture *self,
                                     ClutterGesture *other_gesture,
                                     gboolean       *cancelled_on_recognizing);
+
+  /**
+   * ClutterGestureClass::should_start_while:
+   * @self: the `ClutterGesture`
+   * @recognizing_gesture: 
+   * @should_start: (inout): whether the gesture should start
+   *
+   * Emitted when one or more points have ended.
+   */
+  void (* should_start_while) (ClutterGesture *self,
+                               ClutterGesture *recognizing_gesture,
+                               gboolean       *should_start);
+
+  /**
+   * ClutterGestureClass::other_gesture_may_start:
+   * @self: the `ClutterGesture`
+   * @other_gesture: 
+   * @should_start: (inout): whether the gesture should start
+   *
+   * Emitted when one or more points have ended.
+   */
+  void (* other_gesture_may_start) (ClutterGesture *self,
+                                    ClutterGesture *other_gesture,
+                                    gboolean       *should_start);
 };
 
 CLUTTER_EXPORT
@@ -156,5 +180,9 @@ void clutter_gesture_set_allowed_device_types (ClutterGesture         *self,
 CLUTTER_EXPORT
 void clutter_gesture_can_not_cancel (ClutterGesture *self,
                                      ClutterGesture *other_gesture);
+
+CLUTTER_EXPORT
+void clutter_gesture_recognize_independently_from (ClutterGesture *self,
+                                                   ClutterGesture *other_gesture);
 
 #endif /* __CLUTTER_GESTURE_H__ */
