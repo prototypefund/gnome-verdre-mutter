@@ -3461,13 +3461,14 @@ static void
 create_event_emission_chain (ClutterStage *stage,
                              GArray       *chain,
                              ClutterActor *topmost,
-                             ClutterActor *deepmost)
+                             ClutterActor *deepmost,
+                             const ClutterEvent *event)
 {
   ClutterStagePrivate *priv = stage->priv;
   int i;
 
   g_assert (priv->cur_event_actors->len == 0);
-  clutter_actor_collect_event_actors (topmost, deepmost, priv->cur_event_actors);
+  clutter_actor_collect_event_actors (topmost, deepmost, priv->cur_event_actors, event);
 
   for (i = priv->cur_event_actors->len - 1; i >= 0; i--)
     {
@@ -3588,7 +3589,7 @@ clutter_stage_emit_crossing_event (ClutterStage       *self,
           event_emission_chain = priv->cur_event_emission_chain;
         }
 
-      create_event_emission_chain (self, event_emission_chain, topmost, deepmost);
+      create_event_emission_chain (self, event_emission_chain, topmost, deepmost, event);
 
       g_warn_if_fail (emit_event (event, event_emission_chain) == EVENT_NOT_HANDLED);
 
@@ -4666,7 +4667,7 @@ clutter_stage_emit_event (ClutterStage       *self,
 
       entry->action_controls_crossings = FALSE;
 
-      create_event_emission_chain (self, entry->event_emission_chain, seat_grab_actor, target_actor);
+      create_event_emission_chain (self, entry->event_emission_chain, seat_grab_actor, target_actor, event);
       setup_sequence_actions (entry->event_emission_chain, event);
     }
 
@@ -4683,7 +4684,7 @@ clutter_stage_emit_event (ClutterStage       *self,
     }
   else
     {
-      create_event_emission_chain (self, priv->cur_event_emission_chain, seat_grab_actor, target_actor);
+      create_event_emission_chain (self, priv->cur_event_emission_chain, seat_grab_actor, target_actor, event);
 
       emit_event (event, priv->cur_event_emission_chain);
 

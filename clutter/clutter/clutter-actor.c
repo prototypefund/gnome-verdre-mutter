@@ -19102,10 +19102,10 @@ clutter_actor_detach_grab (ClutterActor *self,
   priv->grabs = g_list_remove (priv->grabs, grab);
 }
 
-void
-clutter_actor_collect_event_actors (ClutterActor *self,
-                                    ClutterActor *deepmost,
-                                    GPtrArray    *actors)
+static void
+collect_event_actors (ClutterActor *self,
+                      ClutterActor *deepmost,
+                      GPtrArray    *actors)
 {
   ClutterActor *iter;
   gboolean in_root = FALSE;
@@ -19141,6 +19141,26 @@ clutter_actor_collect_event_actors (ClutterActor *self,
     }
 }
 
+void
+clutter_actor_collect_event_actors (ClutterActor       *self,
+                                    ClutterActor       *deepmost,
+                                    GPtrArray          *actors,
+                                    const ClutterEvent *for_event)
+{
+  ClutterActorClass *actor_class = CLUTTER_ACTOR_GET_CLASS (self);
+
+  if (actor_class->collect_event_actors)
+    {
+      GPtrArray *new_array = actor_class->collect_event_actors (self, deepmost, for_event);
+
+      g_ptr_array_extend_and_steal (actors, new_array);
+    }
+  else
+    {
+      collect_event_actors (self, deepmost, actors);
+    }
+}
+
 const GList *
 clutter_actor_peek_actions (ClutterActor *self)
 {
@@ -19150,4 +19170,28 @@ clutter_actor_peek_actions (ClutterActor *self)
     return NULL;
 
   return _clutter_meta_group_peek_metas (priv->actions);
+}
+
+/**
+ * clutter_actor_get_event_actors:
+ * @self: a #ClutterActor
+ * @deepmost: a
+ *
+ * Decreases the culling inhibitor counter. See clutter_actor_inhibit_culling()
+ * for when inhibit culling is necessary.
+ *
+ * Calling this function without a matching call to
+ * clutter_actor_inhibit_culling() is a programming error.
+ *
+ * Returns: (transfer container) (element-type Clutter.Actor): the arr
+ */
+GPtrArray *
+clutter_actor_get_event_actors (ClutterActor *self,
+                                ClutterActor *deepmost)
+{
+  GPtrArray *array = g_ptr_array_new ();
+
+  collect_event_actors (self, deepmost, array);
+
+  return array;
 }
