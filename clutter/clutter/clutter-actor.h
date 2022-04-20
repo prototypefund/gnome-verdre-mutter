@@ -292,6 +292,17 @@ struct _ClutterActorClass
   void     (* resource_scale_changed) (ClutterActor *self);
   float    (* calculate_resource_scale) (ClutterActor *self,
                                          int           phase);
+  /**
+   * ClutterActorClass::collect_event_actors:
+   * @self: the `ClutterActor`
+   * @deepmost: 
+   * @for_event: a clutterEvent
+   *
+   * Returns: (transfer full) (element-type Clutter.Actor): asij.
+   */
+  GPtrArray * (* collect_event_actors) (ClutterActor       *self,
+                                        ClutterActor       *deepmost,
+                                        const ClutterEvent *for_event);
 
   /*< private >*/
   /* padding for future expansion */
@@ -931,6 +942,10 @@ void clutter_actor_invalidate_transform (ClutterActor *self);
 
 CLUTTER_EXPORT
 void clutter_actor_invalidate_paint_volume (ClutterActor *self);
+
+CLUTTER_EXPORT
+GPtrArray * clutter_actor_get_event_actors (ClutterActor *self,
+                                            ClutterActor *deepmost);
 
 G_END_DECLS
 

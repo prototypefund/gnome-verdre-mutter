@@ -3605,7 +3605,7 @@ clutter_stage_emit_crossing_event (ClutterStage       *self,
       event_actions = g_ptr_array_sized_new (16);
       g_ptr_array_set_free_func (event_actions, (GDestroyNotify) g_object_unref);
 
-      clutter_actor_collect_event_actors (topmost, deepmost, event_actors);
+      clutter_actor_collect_event_actors (topmost, deepmost, event_actors, event);
       collect_actions_from_event_actors (event_actions, event_actors);
 
       g_warn_if_fail (!emit_discrete_event_on_actions (event, event_actions));
@@ -3636,7 +3636,7 @@ send_implicit_grab_crossing (ClutterStage       *self,
                                     entry->coords,
                                     CLUTTER_CURRENT_TIME);
 
-  clutter_actor_collect_event_actors (seat_grab_actor, entry->current_actor, priv->cur_event_actors);
+  clutter_actor_collect_event_actors (seat_grab_actor, entry->current_actor, priv->cur_event_actors, crossing);
 
   emit_event_on_actors (crossing, priv->cur_event_actors);
   clutter_event_free (crossing);
@@ -4442,7 +4442,7 @@ clutter_stage_emit_event (ClutterStage       *self,
 
   if (is_sequence_begin && setup_sequence_grab (entry))
     {
-      clutter_actor_collect_event_actors (seat_grab_actor, target_actor, entry->event_actors);
+      clutter_actor_collect_event_actors (seat_grab_actor, target_actor, entry->event_actors, event);
       collect_actions_from_event_actors (entry->event_actions, entry->event_actors);
       setup_sequence_actions (entry->event_actions, event);
     }
@@ -4455,7 +4455,7 @@ clutter_stage_emit_event (ClutterStage       *self,
     }
   else
     {
-      clutter_actor_collect_event_actors (seat_grab_actor, target_actor, priv->cur_event_actors);
+      clutter_actor_collect_event_actors (seat_grab_actor, target_actor, priv->cur_event_actors, event);
       collect_actions_from_event_actors (priv->cur_event_actions, priv->cur_event_actors);
 
       if (!emit_discrete_event_on_actions (event, priv->cur_event_actions))
