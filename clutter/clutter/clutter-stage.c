@@ -3648,8 +3648,8 @@ clutter_stage_emit_crossing_event (ClutterStage       *self,
       event_actions = g_ptr_array_sized_new (16);
       g_ptr_array_set_free_func (event_actions, (GDestroyNotify) g_object_unref);
 
-      clutter_actor_collect_event_actions (deepmost,
-                                           topmost,
+      clutter_actor_collect_event_actions (topmost, deepmost,
+                                           event,
                                            event_actions);
 
       g_warn_if_fail (!emit_discrete_event_on_actions (event, source_actor, event_actions));
@@ -4442,7 +4442,7 @@ clutter_stage_emit_event (ClutterStage       *self,
     }
 
   g_assert (target_actor != NULL);
-  seat_grab_actor = clutter_stage_get_grab_actor (self);
+  seat_grab_actor = clutter_stage_get_grab_actor (self) ? clutter_stage_get_grab_actor (self) : CLUTTER_ACTOR (self);
 
   is_sequence_begin =
     event->type == CLUTTER_BUTTON_PRESS || event->type == CLUTTER_TOUCH_BEGIN;
@@ -4452,8 +4452,9 @@ clutter_stage_emit_event (ClutterStage       *self,
 
   if (is_sequence_begin && setup_sequence_grab (entry))
     {
-      clutter_actor_collect_event_actions (target_actor,
-                                           seat_grab_actor,
+      clutter_actor_collect_event_actions (seat_grab_actor,
+target_actor,
+                                          event,
                                            entry->event_actions);
       g_ptr_array_add (entry->event_actions,
                        g_object_ref (priv->recognizing_gestures_tracker));
@@ -4487,8 +4488,9 @@ clutter_stage_emit_event (ClutterStage       *self,
     }
   else
     {
-      clutter_actor_collect_event_actions (target_actor,
-                                           seat_grab_actor,
+      clutter_actor_collect_event_actions (seat_grab_actor,
+target_actor,
+event,
                                            priv->cur_event_actions);
 
       if (!emit_discrete_event_on_actions (event, NULL, priv->cur_event_actions))

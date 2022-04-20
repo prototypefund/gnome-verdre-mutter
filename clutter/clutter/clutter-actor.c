@@ -5886,6 +5886,86 @@ clutter_actor_real_calculate_resource_scale (ClutterActor *self,
 }
 
 static void
+collect_actions_for_phase (ClutterActor      *self,
+                           ClutterActor      *root,
+                           GPtrArray         *array,
+                           ClutterEventPhase  phase)
+{
+  ClutterActorPrivate *priv = self->priv;
+  gboolean is_reactive;
+
+  is_reactive =
+    CLUTTER_ACTOR_IS_REACTIVE (self) || /* an actor must be reactive */
+    priv->parent == NULL;               /* unless it's the stage */
+
+  if (phase == CLUTTER_PHASE_CAPTURE && priv->parent && self != root)
+    collect_actions_for_phase (priv->parent, root, array, phase);
+
+  if (is_reactive && priv->actions != NULL)
+    {
+      const GList *actions, *l;
+
+      actions = _clutter_meta_group_peek_metas (priv->actions);
+      for (l = actions; l; l = l->next)
+        {
+          ClutterAction *action = l->data;
+
+          if (!clutter_actor_meta_get_enabled (CLUTTER_ACTOR_META (action)))
+            continue;
+
+          if (clutter_action_get_phase (action) == phase)
+            g_ptr_array_add (array, g_object_ref (action));
+        }
+    }
+
+  if (phase == CLUTTER_PHASE_BUBBLE && priv->parent && self != root)
+    collect_actions_for_phase (priv->parent, root, array, phase);
+}
+
+/**
+ * clutter_actor_get_event_actions:
+ * @self: a #ClutterActor
+ * @root: a
+ * @for_event: a
+ *
+ * Decreases the culling inhibitor counter. See clutter_actor_inhibit_culling()
+ * for when inhibit culling is necessary.
+ *
+ * Calling this function without a matching call to
+ * clutter_actor_inhibit_culling() is a programming error.
+ *
+ * Returns: (transfer full) (element-type Clutter.Action): the arr
+ */
+GPtrArray *
+clutter_actor_get_event_actions (ClutterActor *self,
+                                     ClutterActor *target,
+                                      ClutterEvent *for_event)
+{
+
+GPtrArray *array = g_ptr_array_new ();
+g_warning("GETTING ACTIONS, ptr ARRAY: %p, len %d", array, array->len);
+
+
+  if (!clutter_actor_contains (self, target))
+    {
+      /* The grab root conceptually extends infinitely in all
+       * directions, so it handles the events that fall outside of
+       * the actor.
+       */
+      collect_actions_for_phase (self, self, array, CLUTTER_PHASE_CAPTURE);
+      collect_actions_for_phase (self, self, array, CLUTTER_PHASE_BUBBLE);
+    }
+  else
+    {
+      collect_actions_for_phase (target, self, array, CLUTTER_PHASE_CAPTURE);
+      collect_actions_for_phase (target, self, array, CLUTTER_PHASE_BUBBLE);
+    }
+g_warning("get actions len after %d", array->len);
+
+  return array;
+}
+
+static void
 clutter_actor_real_destroy (ClutterActor *actor)
 {
   ClutterActorIter iter;
@@ -19704,62 +19784,37 @@ clutter_actor_detach_grab (ClutterActor *self,
   priv->grabs = g_list_remove (priv->grabs, grab);
 }
 
-static void
-collect_actions_for_phase (ClutterActor      *self,
-                           ClutterActor      *root,
-                           GPtrArray         *array,
-                           ClutterEventPhase  phase)
-{
-  ClutterActorPrivate *priv = self->priv;
-  gboolean is_reactive;
 
-  is_reactive =
-    CLUTTER_ACTOR_IS_REACTIVE (self) || /* an actor must be reactive */
-    priv->parent == NULL;               /* unless it's the stage */
-
-  if (phase == CLUTTER_PHASE_CAPTURE && priv->parent && self != root)
-    collect_actions_for_phase (priv->parent, root, array, phase);
-
-  if (is_reactive && priv->actions != NULL)
-    {
-      const GList *actions, *l;
-
-      actions = _clutter_meta_group_peek_metas (priv->actions);
-      for (l = actions; l; l = l->next)
-        {
-          ClutterAction *action = l->data;
-
-          if (!clutter_actor_meta_get_enabled (CLUTTER_ACTOR_META (action)))
-            continue;
-
-          if (clutter_action_get_phase (action) == phase)
-            g_ptr_array_add (array, g_object_ref (action));
-        }
-    }
-
-  if (phase == CLUTTER_PHASE_BUBBLE && priv->parent && self != root)
-    collect_actions_for_phase (priv->parent, root, array, phase);
-}
 
 void
 clutter_actor_collect_event_actions (ClutterActor *self,
                                      ClutterActor *root,
+                                      ClutterEvent *for_event,
                                      GPtrArray    *array)
 {
   g_assert (array->len == 0);
 
-  if (root && !clutter_actor_contains (root, self))
+  if (CLUTTER_ACTOR_GET_CLASS (self)->collect_event_actions)
+    {
+      GPtrArray *new_array = CLUTTER_ACTOR_GET_CLASS (self)->collect_event_actions (self, root, for_event);
+
+      g_ptr_array_extend_and_steal (array, new_array);
+    }
+else
+  {
+  if (!clutter_actor_contains (self, root))
     {
       /* The grab root conceptually extends infinitely in all
        * directions, so it handles the events that fall outside of
        * the actor.
        */
-      collect_actions_for_phase (root, root, array, CLUTTER_PHASE_CAPTURE);
-      collect_actions_for_phase (root, root, array, CLUTTER_PHASE_BUBBLE);
+      collect_actions_for_phase (self, self, array, CLUTTER_PHASE_CAPTURE);
+      collect_actions_for_phase (self, self, array, CLUTTER_PHASE_BUBBLE);
     }
   else
     {
-      collect_actions_for_phase (self, root, array, CLUTTER_PHASE_CAPTURE);
-      collect_actions_for_phase (self, root, array, CLUTTER_PHASE_BUBBLE);
+      collect_actions_for_phase (root, self, array, CLUTTER_PHASE_CAPTURE);
+      collect_actions_for_phase (root, self, array, CLUTTER_PHASE_BUBBLE);
     }
+  }
 }
