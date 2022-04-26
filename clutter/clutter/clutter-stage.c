@@ -4431,7 +4431,8 @@ clutter_stage_emit_event (ClutterStage       *self,
           float x, y;
 
           clutter_event_get_coords (event, &x, &y);
-
+if (!entry)
+return;
           CLUTTER_NOTE (EVENT,
                         "Reactive event received at %.2f, %.2f - actor: %p",
                         x, y, entry->current_actor);
