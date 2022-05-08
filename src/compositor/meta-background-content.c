@@ -693,14 +693,14 @@ meta_background_content_paint_content (ClutterContent      *content,
       clutter_actor_get_transformed_position (actor,
                                               &transformed_x,
                                               &transformed_y);
-      rect_within_stage.x = floorf (transformed_x);
-      rect_within_stage.y = floorf (transformed_y);
+      rect_within_stage.x = /*floorf*/ (transformed_x);
+      rect_within_stage.y = /*floorf*/ (transformed_y);
 
       clutter_actor_get_transformed_size (actor,
                                           &transformed_width,
                                           &transformed_height);
-      rect_within_stage.width = ceilf (transformed_width);
-      rect_within_stage.height = ceilf (transformed_height);
+      rect_within_stage.width = /*ceilf*/ (transformed_width);
+      rect_within_stage.height = /*ceilf*/ (transformed_height);
 
       untransformed =
         rect_within_actor.x == rect_within_stage.x &&

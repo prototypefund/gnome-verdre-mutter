@@ -264,7 +264,7 @@ clutter_bind_constraint_update_allocation (ClutterConstraint *constraint,
       break;
     }
 
-  clutter_actor_box_clamp_to_pixel (allocation);
+//  clutter_actor_box_clamp_to_pixel (allocation);
 }
 
 static void
