@@ -348,7 +348,8 @@ meta_gesture_tracker_track_stage (MetaGestureTracker *tracker,
     {
       GestureActionData data;
 
-      if (!CLUTTER_IS_GESTURE (l->data))
+      if (clutter_actor_meta_get_enabled (l->data) &&
+          !CLUTTER_IS_GESTURE (l->data))
         continue;
 
       data.gesture = g_object_ref (l->data);
