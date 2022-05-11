@@ -136,12 +136,14 @@ GList * clutter_stage_get_views_for_rect (ClutterStage          *stage,
 
 void clutter_stage_set_actor_needs_immediate_relayout (ClutterStage *stage);
 
-void clutter_stage_update_device_entry (ClutterStage         *self,
-                                        ClutterInputDevice   *device,
-                                        ClutterEventSequence *sequence,
-                                        graphene_point_t      coords,
-                                        ClutterActor         *actor,
-                                        cairo_region_t       *clear_area);
+void clutter_stage_update_device (ClutterStage         *stage,
+                                  ClutterInputDevice   *device,
+                                  ClutterEventSequence *sequence,
+                                  graphene_point_t      point,
+                                  uint32_t              time,
+                                  ClutterActor         *new_actor,
+                                  cairo_region_t       *region,
+                                  gboolean              emit_crossing);
 
 void clutter_stage_remove_device_entry (ClutterStage         *self,
                                         ClutterInputDevice   *device,
