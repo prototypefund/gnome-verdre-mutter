@@ -803,6 +803,8 @@ struct _ClutterActorPrivate
   GList *stage_views;
   GList *grabs;
 
+  unsigned int has_pointer_count;
+
   /* bitfields: KEEP AT THE END */
 
   /* fixed position and sizes */
@@ -822,7 +824,6 @@ struct _ClutterActorPrivate
   guint clip_to_allocation          : 1;
   guint enable_model_view_transform : 1;
   guint enable_paint_unmapped       : 1;
-  guint has_pointer                 : 1;
   guint has_key_focus               : 1;
   guint propagated_one_redraw       : 1;
   guint paint_volume_valid          : 1;
@@ -1701,7 +1702,7 @@ clutter_actor_real_unmap (ClutterActor *self)
    */
   g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_MAPPED]);
 
-  if (priv->has_pointer)
+  if (priv->has_pointer_count > 0)
     {
       ClutterActor *stage = _clutter_actor_get_stage_internal (self);
 
@@ -5403,7 +5404,7 @@ clutter_actor_get_property (GObject    *object,
       break;
 
     case PROP_HAS_POINTER:
-      g_value_set_boolean (value, priv->has_pointer);
+      g_value_set_boolean (value, clutter_actor_has_pointer (actor));
       break;
 
     case PROP_LAYOUT_MANAGER:
@@ -12504,7 +12505,7 @@ clutter_actor_set_reactive (ClutterActor *actor,
 
   g_object_notify_by_pspec (G_OBJECT (actor), obj_props[PROP_REACTIVE]);
 
-  if (!CLUTTER_ACTOR_IS_REACTIVE (actor) && priv->has_pointer)
+  if (!CLUTTER_ACTOR_IS_REACTIVE (actor) && priv->has_pointer_count > 0)
     {
       ClutterActor *stage = _clutter_actor_get_stage_internal (actor);
 
@@ -14711,12 +14712,21 @@ _clutter_actor_set_has_pointer (ClutterActor *self,
 {
   ClutterActorPrivate *priv = self->priv;
 
-  if (priv->has_pointer != has_pointer)
+  if (has_pointer)
     {
-      priv->has_pointer = has_pointer;
+      g_assert (CLUTTER_IS_STAGE (self) || CLUTTER_ACTOR_IS_MAPPED (self));
 
-      g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_HAS_POINTER]);
+      priv->has_pointer_count++;
     }
+  else
+    {
+      g_assert (priv->has_pointer_count > 0);
+
+      priv->has_pointer_count--;
+    }
+
+  if (priv->has_pointer_count == 0 || priv->has_pointer_count == 1)
+    g_object_notify_by_pspec (G_OBJECT (self), obj_props[PROP_HAS_POINTER]);
 }
 
 void
@@ -14787,7 +14797,7 @@ clutter_actor_has_pointer (ClutterActor *self)
 {
   g_return_val_if_fail (CLUTTER_IS_ACTOR (self), FALSE);
 
-  return self->priv->has_pointer;
+  return self->priv->has_pointer_count > 0;
 }
 
 /**
