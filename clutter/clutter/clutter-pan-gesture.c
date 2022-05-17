@@ -90,12 +90,6 @@ static unsigned int obj_signals[LAST_SIGNAL] = { 0, };
 
 G_DEFINE_TYPE_WITH_PRIVATE (ClutterPanGesture, clutter_pan_gesture, CLUTTER_TYPE_GESTURE)
 
-static unsigned int
-get_begin_threshold (void)
-{
-  return DEFAULT_BEGIN_THRESHOLD_PX;
-}
-
 static void
 add_delta_to_event_history (ClutterPanGesture     *self,
                             const graphene_vec2_t *delta,
@@ -627,7 +621,7 @@ clutter_pan_gesture_init (ClutterPanGesture *self)
   ClutterPanGesturePrivate *priv =
     clutter_pan_gesture_get_instance_private (self);
 
-  priv->begin_threshold = get_begin_threshold ();
+  priv->begin_threshold = DEFAULT_BEGIN_THRESHOLD_PX;
 
   priv->event_history =
     g_array_sized_new (FALSE, TRUE, sizeof (HistoryEntry), EVENT_HISTORY_MAX_LENGTH);
