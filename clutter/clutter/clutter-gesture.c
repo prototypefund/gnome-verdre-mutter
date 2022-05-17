@@ -622,33 +622,44 @@ set_state (ClutterGesture      *self,
   if (priv->state == CLUTTER_GESTURE_STATE_POSSIBLE ||
       priv->state == CLUTTER_GESTURE_STATE_RECOGNIZE_PENDING)
     {
-      /* Enforce the inhibition machinery */
-      if ((new_state == CLUTTER_GESTURE_STATE_RECOGNIZING ||
-           new_state == CLUTTER_GESTURE_STATE_RECOGNIZED) &&
-          priv->inhibited_count > 0)
-        {
-          priv->pending_state = new_state;
-          set_state (self, CLUTTER_GESTURE_STATE_RECOGNIZE_PENDING, recursion_depth);
-          return;
-        }
 
-      priv->pending_state = 0;
-
-      if (new_state == CLUTTER_GESTURE_STATE_RECOGNIZING)
+      if (new_state == CLUTTER_GESTURE_STATE_RECOGNIZING ||
+          new_state == CLUTTER_GESTURE_STATE_RECOGNIZED)
         {
-          if (!gesture_may_start (self))
+          /* Enforce the inhibition machinery */
+          if (priv->inhibited_count > 0)
             {
-              set_state_authoritative (self, CLUTTER_GESTURE_STATE_CANCELLED, recursion_depth);
+              priv->pending_state = new_state;
+          CLUTTER_NOTE (GESTURES,
+                        "%*s<%s> [<%s>:%p] set pending state",
+                        recursion_depth * 2, "", clutter_actor_meta_get_name (CLUTTER_ACTOR_META (self)),
+                        G_OBJECT_TYPE_NAME (self), self);
+              set_state (self, CLUTTER_GESTURE_STATE_RECOGNIZE_PENDING, recursion_depth);
               return;
             }
-        }
 
-      /* Moving to RECOGNIZED always goes through RECOGNIZING */
-      if (new_state == CLUTTER_GESTURE_STATE_RECOGNIZED)
-        {
-          set_state_authoritative (self, CLUTTER_GESTURE_STATE_RECOGNIZING, recursion_depth);
-          if (priv->state != CLUTTER_GESTURE_STATE_RECOGNIZING)
-            return;
+          CLUTTER_NOTE (GESTURES,
+                        "%*s<%s> [<%s>:%p] unsetting pending state",
+                        recursion_depth * 2, "", clutter_actor_meta_get_name (CLUTTER_ACTOR_META (self)),
+                        G_OBJECT_TYPE_NAME (self), self);
+          priv->pending_state = 0;
+
+          if (new_state == CLUTTER_GESTURE_STATE_RECOGNIZING)
+            {
+              if (!gesture_may_start (self))
+                {
+                  set_state_authoritative (self, CLUTTER_GESTURE_STATE_CANCELLED, recursion_depth);
+                  return;
+                }
+            }
+
+          /* Moving to RECOGNIZED always goes through RECOGNIZING */
+          if (new_state == CLUTTER_GESTURE_STATE_RECOGNIZED)
+            {
+              set_state_authoritative (self, CLUTTER_GESTURE_STATE_RECOGNIZING, recursion_depth);
+              if (priv->state != CLUTTER_GESTURE_STATE_RECOGNIZING)
+                return;
+            }
         }
     }
 
@@ -691,7 +702,7 @@ set_state (ClutterGesture      *self,
       priv->inhibited_count = 0;
     }
 
-  if (priv->state != CLUTTER_GESTURE_STATE_WAITING)
+  //if (priv->state != CLUTTER_GESTURE_STATE_WAITING)
     {
       CLUTTER_NOTE (GESTURES,
                     "%*s<%s> [<%s>:%p] State changed: %s -> %s",
@@ -791,6 +802,15 @@ maybe_influence_other_gestures (ClutterGesture *self,
               CLUTTER_NOTE (GESTURES, "%*s<%s> [<%s>:%p] Was already CANCELLED by an influencing before us",
                             recursion_depth * 2, "", clutter_actor_meta_get_name (CLUTTER_ACTOR_META (other_gesture)),
                             G_OBJECT_TYPE_NAME (other_gesture), other_gesture);
+              continue;
+            }
+
+          if (other_priv->state == CLUTTER_GESTURE_STATE_CANCELLED)
+            {
+              CLUTTER_NOTE (GESTURES, "%*s<%s> [<%s>:%p] Was already CANCELLED by an influencing recursed by us",
+                            recursion_depth * 2, "", clutter_actor_meta_get_name (CLUTTER_ACTOR_META (other_gesture)),
+                            G_OBJECT_TYPE_NAME (other_gesture), other_gesture);
+
               continue;
             }
 
@@ -916,7 +936,8 @@ clutter_gesture_handle_event (ClutterAction      *action,
     {
       g_assert (priv->state == CLUTTER_GESTURE_STATE_POSSIBLE ||
                 priv->state == CLUTTER_GESTURE_STATE_RECOGNIZE_PENDING ||
-                priv->state == CLUTTER_GESTURE_STATE_RECOGNIZING);
+                priv->state == CLUTTER_GESTURE_STATE_RECOGNIZING ||
+                priv->state == CLUTTER_GESTURE_STATE_CANCELLED);
     }
   else
     {
