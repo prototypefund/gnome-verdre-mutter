@@ -1640,3 +1640,17 @@ meta_workspace_get_display (MetaWorkspace *workspace)
 {
   return workspace->display;
 }
+
+/**
+ * meta_workspace_get_windows:
+ * @workspace: a #MetaWorkspace
+ *
+ * Gets the #MetaDisplay that the workspace is part of.
+ *
+ * Returns: (transfer none) (element-type Meta.Window): the list of windows
+ */
+GList *
+meta_workspace_get_windows (MetaWorkspace *workspace)
+{
+  return workspace->windows;
+}
