@@ -73,4 +73,7 @@ META_EXPORT
 MetaWorkspace* meta_workspace_get_neighbor (MetaWorkspace      *workspace,
                                             MetaMotionDirection direction);
 
+META_EXPORT
+gboolean meta_workspace_get_is_tiling_workspace (MetaWorkspace *workspace);
+
 #endif

@@ -63,6 +63,7 @@ enum
   PROP_N_WINDOWS,
   PROP_WORKSPACE_INDEX,
   PROP_ACTIVE,
+  PROP_IS_TILING_WORKSPACE,
 
   PROP_LAST,
 };
@@ -152,8 +153,13 @@ meta_workspace_set_property (GObject      *object,
                              const GValue *value,
                              GParamSpec   *pspec)
 {
+  MetaWorkspace *ws = META_WORKSPACE (object);
+
   switch (prop_id)
     {
+    case PROP_IS_TILING_WORKSPACE:
+      ws->is_tiling_workspace = g_value_get_boolean (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -182,6 +188,9 @@ meta_workspace_get_property (GObject      *object,
       break;
     case PROP_ACTIVE:
       g_value_set_boolean (value, ws->manager->active_workspace == ws);
+      break;
+    case PROP_IS_TILING_WORKSPACE:
+      g_value_set_boolean (value, ws->is_tiling_workspace);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -228,6 +237,14 @@ meta_workspace_class_init (MetaWorkspaceClass *klass)
                                                  FALSE,
                                                  G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
+  obj_props[PROP_IS_TILING_WORKSPACE] =
+    g_param_spec_boolean ("is-tiling-workspace",
+                          "Is tiling workspace",
+                          "Whether workspace is a tiling workspace",
+                          FALSE,
+                          G_PARAM_READWRITE |
+                          G_PARAM_STATIC_STRINGS);
+
   g_object_class_install_properties (object_class, PROP_LAST, obj_props);
 }
 
@@ -268,6 +285,8 @@ meta_workspace_new (MetaWorkspaceManager *workspace_manager)
   workspace->all_struts = NULL;
 
   workspace->showing_desktop = FALSE;
+
+  workspace->is_tiling_workspace = FALSE;
 
   /* make sure sticky windows are in our mru_list */
   windows = meta_display_list_windows (display, META_LIST_SORTED);
@@ -1531,4 +1550,20 @@ GList *
 meta_workspace_get_windows (MetaWorkspace *workspace)
 {
   return workspace->windows;
+}
+
+/**
+ * meta_workspace_get_is_tiling_workspace:
+ * @workspace: a #MetaWorkspace
+ *
+ * Gets the #MetaDisplay that the workspace is part of.
+ *
+ * Returns: the list of windows
+ */
+gboolean
+meta_workspace_get_is_tiling_workspace (MetaWorkspace *workspace)
+{
+  g_return_val_if_fail (META_IS_WORKSPACE (workspace), FALSE);
+
+  return workspace->is_tiling_workspace;
 }

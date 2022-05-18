@@ -66,6 +66,7 @@ struct _MetaWorkspace
   guint work_areas_invalid : 1;
 
   guint showing_desktop : 1;
+  guint is_tiling_workspace : 1;
 };
 
 struct _MetaWorkspaceClass
