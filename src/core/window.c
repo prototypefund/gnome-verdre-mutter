@@ -219,6 +219,7 @@ enum
   SIZE_CHANGED,
   POSITION_CHANGED,
   SHOWN,
+  TRANSIENT_FOR_CHANGED,
 
   LAST_SIGNAL
 };
@@ -740,6 +741,19 @@ meta_window_class_init (MetaWindowClass *klass)
    */
   window_signals[SIZE_CHANGED] =
     g_signal_new ("size-changed",
+                  G_TYPE_FROM_CLASS (object_class),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 0);
+  /**
+   * MetaWindow::transient-for-changed:
+   * @window: a #MetaWindow
+   *
+   * Emitted when the transient-for window has changed.
+   */
+  window_signals[TRANSIENT_FOR_CHANGED] =
+    g_signal_new ("transient-for-changed",
                   G_TYPE_FROM_CLASS (object_class),
                   G_SIGNAL_RUN_LAST,
                   0,
@@ -7949,6 +7963,8 @@ void
 meta_window_set_transient_for (MetaWindow *window,
                                MetaWindow *parent)
 {
+  MetaWindow *old_transient_for = window->transient_for;
+
   if (check_transient_for_loop (window, parent))
     {
       meta_warning ("Setting %s transient for %s would create a loop.",
@@ -8015,6 +8031,9 @@ meta_window_set_transient_for (MetaWindow *window,
 
   if (window->appears_focused && window->transient_for != NULL)
     meta_window_propagate_focus_appearance (window, TRUE);
+
+  if (window->transient_for != old_transient_for)
+    g_signal_emit (window, window_signals[TRANSIENT_FOR_CHANGED], 0);
 }
 
 void
