@@ -1926,6 +1926,9 @@ meta_display_begin_grab_op (MetaDisplay *display,
       return FALSE;
     }
 
+  if (!grab_window->can_grab)
+    return FALSE;
+
   /* Grab keys when beginning window ops; see #126497 */
   if (event_route == META_EVENT_ROUTE_WINDOW_OP)
     {
