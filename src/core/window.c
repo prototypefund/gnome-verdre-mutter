@@ -1029,6 +1029,8 @@ _meta_window_shared_new (MetaDisplay         *display,
   meta_window_update_desc (window);
 
   window->override_redirect = attrs->override_redirect;
+if (window->override_redirect)
+g_warning("WS: FFUUUUCK, it's an OR window");
 
   /* avoid tons of stack updates */
   meta_stack_freeze (window->display->stack);
@@ -1172,6 +1174,8 @@ _meta_window_shared_new (MetaDisplay         *display,
   window->initial_timestamp = 0; /* not used */
 
   window->compositor_private = NULL;
+
+  window->can_grab = TRUE;
 
   if (window->rect.width > 0 && window->rect.height > 0)
     window->monitor = meta_window_find_monitor_from_frame_rect (window);
@@ -8643,4 +8647,17 @@ meta_window_calculate_bounds (MetaWindow *window,
     {
       return FALSE;
     }
+}
+
+void
+meta_window_set_can_grab (MetaWindow *window,
+                          gboolean    can_grab)
+{
+  if (window->can_grab == can_grab)
+    return;
+
+  window->can_grab = can_grab;
+
+  if (!window->can_grab && window->display->grab_window == window)
+    meta_display_end_grab_op (window->display, meta_display_get_current_time_roundtrip (window->display));
 }
