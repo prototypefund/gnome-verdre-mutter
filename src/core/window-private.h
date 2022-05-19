@@ -427,6 +427,8 @@ struct _MetaWindow
   /* Whether the window is alive */
   guint is_alive : 1;
 
+  unsigned int can_grab : 1;
+
   /* if non-NULL, the bounds of the window frame */
   cairo_region_t *frame_bounds;
 
