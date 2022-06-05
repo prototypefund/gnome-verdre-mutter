@@ -691,6 +691,7 @@ struct _ClutterActorPrivate
 
   /* the cached matrix including modelview and projection up to the stage */
   graphene_matrix_t absolute_modelview_projection;
+  graphene_matrix_t absolute_modelview;
 
   float resource_scale;
 
@@ -849,6 +850,7 @@ struct _ClutterActorPrivate
   guint needs_update_stage_views    : 1;
   guint clear_stage_views_needs_stage_views_changed : 1;
   guint has_inverse_transform       : 1;
+  guint absolute_modelview_valid : 1;
   guint absolute_modelview_projection_valid : 1;
 };
 
@@ -2507,6 +2509,7 @@ static void
 absolute_geometry_changed (ClutterActor *actor)
 {
   actor->priv->absolute_modelview_projection_valid = FALSE;
+  actor->priv->absolute_modelview_valid = FALSE;
   queue_update_stage_views (actor);
 }
 
@@ -3126,6 +3129,36 @@ _clutter_actor_apply_relative_transformation_matrix (ClutterActor      *self,
                                                          matrix);
 
   _clutter_actor_apply_modelview_transform (self, matrix);
+}
+
+graphene_matrix_t *
+clutter_actor_get_absolute_modelview (ClutterActor *self)
+{
+  ClutterActorPrivate *priv = self->priv;
+
+  if (priv->absolute_modelview_valid) {
+    return &priv->absolute_modelview;
+  }
+
+  graphene_matrix_init_identity (&priv->absolute_modelview);
+
+  if (priv->parent == NULL)
+    {
+      /* No parents, this must be the stage... */
+
+    }
+  else
+    {
+      graphene_matrix_multiply (&priv->absolute_modelview,
+                                clutter_actor_get_absolute_modelview (priv->parent),
+                                &priv->absolute_modelview);
+    }
+
+  _clutter_actor_apply_modelview_transform (self,
+                                            &priv->absolute_modelview);
+
+  priv->absolute_modelview_valid = TRUE;
+  return &priv->absolute_modelview;
 }
 
 graphene_matrix_t *
@@ -7776,6 +7809,7 @@ clutter_actor_init (ClutterActor *self)
 
   priv->transform_valid = FALSE;
   priv->absolute_modelview_projection_valid = FALSE;
+  priv->absolute_modelview_valid = FALSE;
 
   /* the default is to stretch the content, to match the
    * current behaviour of basically all actors. also, it's

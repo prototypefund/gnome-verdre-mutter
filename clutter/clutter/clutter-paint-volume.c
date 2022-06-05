@@ -1094,12 +1094,22 @@ _clutter_paint_volume_transform_relative (ClutterPaintVolume *pv,
 
   _clutter_paint_volume_set_reference_actor (pv, relative_to_ancestor);
 
+if (relative_to_ancestor == NULL) {
+  graphene_matrix_t *abs;
+  abs = clutter_actor_get_absolute_modelview (actor);
+
+  _clutter_paint_volume_transform (pv, abs);
+} else {
+
+
+
   graphene_matrix_init_identity (&matrix);
   _clutter_actor_apply_relative_transformation_matrix (actor,
                                                        relative_to_ancestor,
                                                       &matrix);
 
   _clutter_paint_volume_transform (pv, &matrix);
+}
 }
 
 void
