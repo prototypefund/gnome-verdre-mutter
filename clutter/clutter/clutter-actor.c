@@ -831,6 +831,7 @@ struct _ClutterActorPrivate
   guint propagated_one_redraw       : 1;
   guint paint_volume_valid          : 1;
   guint last_paint_volume_valid     : 1;
+  guint reuse_last_pv     : 1;
   guint in_clone_paint              : 1;
   guint transform_valid             : 1;
   /* This is TRUE if anything has queued a redraw since we were last
@@ -1689,8 +1690,8 @@ clutter_actor_real_unmap (ClutterActor *self)
       /* clear the contents of the last paint volume, so that hiding + moving +
        * showing will not result in the wrong area being repainted
        */
-     _clutter_paint_volume_init_static (&priv->last_paint_volume, NULL);
-      priv->last_paint_volume_valid = TRUE;
+//     _clutter_paint_volume_init_static (&priv->last_paint_volume, NULL);
+  //    priv->last_paint_volume_valid = TRUE;
 
       if (priv->parent && !CLUTTER_ACTOR_IN_DESTRUCTION (priv->parent))
         {
@@ -2510,6 +2511,7 @@ absolute_geometry_changed (ClutterActor *actor)
 {
   actor->priv->absolute_modelview_projection_valid = FALSE;
   actor->priv->absolute_modelview_valid = FALSE;
+actor->priv->reuse_last_pv = FALSE;
   queue_update_stage_views (actor);
 }
 
@@ -3470,13 +3472,18 @@ _clutter_actor_update_last_paint_volume (ClutterActor *self)
   ClutterActorPrivate *priv = self->priv;
   const ClutterPaintVolume *pv;
 
+  if (priv->reuse_last_pv)
+    return;
+
+  priv->reuse_last_pv = TRUE;
+
   if (priv->last_paint_volume_valid)
     {
-      clutter_paint_volume_free (&priv->last_paint_volume);
+      //clutter_paint_volume_free (&priv->last_paint_volume);
       priv->last_paint_volume_valid = FALSE;
     }
 
-  pv = clutter_actor_get_paint_volume (self);
+  pv = _clutter_actor_get_paint_volume_mutable (self);
   if (!pv)
     {
       CLUTTER_NOTE (CLIPPING, "Bail from update_last_paint_volume (%s): "
