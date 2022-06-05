@@ -853,6 +853,7 @@ struct _ClutterActorPrivate
   guint has_inverse_transform       : 1;
   guint absolute_modelview_valid : 1;
   guint absolute_modelview_projection_valid : 1;
+  guint child_geometry_changed : 1;
 };
 
 enum
@@ -2533,11 +2534,21 @@ transform_changed (ClutterActor *actor)
   if (actor->priv->parent)
     queue_update_paint_volume (actor->priv->parent);
 
+
+
   _clutter_actor_traverse (actor,
                            CLUTTER_ACTOR_TRAVERSE_DEPTH_FIRST,
                            absolute_geometry_changed_cb,
                            NULL,
                            NULL);
+
+  actor = actor->priv->parent;
+
+  while (actor)
+    {
+      actor->priv->child_geometry_changed = TRUE;
+      actor = actor->priv->parent;
+    }
 }
 
 /*< private >
@@ -15693,18 +15704,20 @@ clutter_actor_finish_layout (ClutterActor *self,
       CLUTTER_ACTOR_IN_DESTRUCTION (self))
     return;
 
-  _clutter_actor_update_last_paint_volume (self);
+  if (priv->child_geometry_changed || !priv->reuse_last_pv) {
+    _clutter_actor_update_last_paint_volume (self);
 
-  if (priv->needs_update_stage_views)
-    {
-      update_stage_views (self);
-      update_resource_scale (self, use_max_scale);
+    if (priv->needs_update_stage_views)
+      {
+        update_stage_views (self);
+        update_resource_scale (self, use_max_scale);
 
-      priv->needs_update_stage_views = FALSE;
-    }
+        priv->needs_update_stage_views = FALSE;
+      }
 
-  for (child = priv->first_child; child; child = child->priv->next_sibling)
-    clutter_actor_finish_layout (child, use_max_scale);
+    for (child = priv->first_child; child; child = child->priv->next_sibling)
+      clutter_actor_finish_layout (child, use_max_scale);
+  }
 }
 
 /**
