@@ -4258,6 +4258,7 @@ clutter_stage_maybe_lost_sequence_grab (ClutterStage         *self,
 {
   ClutterStagePrivate *priv = self->priv;
   PointerDeviceEntry *entry = NULL;
+  unsigned int i;
 
   if (sequence != NULL)
     entry = g_hash_table_lookup (priv->touch_sequences, sequence);
@@ -4268,6 +4269,13 @@ clutter_stage_maybe_lost_sequence_grab (ClutterStage         *self,
 
   if (!entry->press_count)
     return;
+
+  for (i = 0; i < entry->event_actions->len; i++)
+    {
+      ClutterAction *action = g_ptr_array_index (entry->event_actions, i);
+
+      clutter_action_sequences_cancelled (action, device, sequence, sequence ? 1 : 0);
+    }
 
   g_ptr_array_remove_range (entry->event_actors, 0,
                             entry->event_actors->len);
