@@ -4271,7 +4271,13 @@ remove_all_actions_from_chain (PointerDeviceEntry *entry)
         &g_array_index (entry->event_emission_chain, EventReceiver, i);
 
       if (receiver->action)
-        g_clear_object (&receiver->action);
+        {
+          clutter_action_sequences_cancelled (receiver->action,
+                                              entry->device,
+                                              entry->sequence,
+                                              entry->sequence ? 1 : 0);
+          g_clear_object (&receiver->action);
+        }
     }
 }
 
@@ -4345,6 +4351,7 @@ clutter_stage_maybe_lost_sequence_grab (ClutterStage         *self,
 {
   ClutterStagePrivate *priv = self->priv;
   PointerDeviceEntry *entry = NULL;
+  unsigned int i;
 
   if (sequence != NULL)
     entry = g_hash_table_lookup (priv->touch_sequences, sequence);
@@ -4355,6 +4362,15 @@ clutter_stage_maybe_lost_sequence_grab (ClutterStage         *self,
 
   if (!entry->press_count)
     return;
+
+  for (i = 0; i < entry->event_emission_chain->len; i++)
+    {
+      EventReceiver *receiver =
+        &g_array_index (entry->event_emission_chain, EventReceiver, i);
+
+      if (receiver->action)
+        clutter_action_sequences_cancelled (receiver->action, device, sequence, sequence ? 1 : 0);
+    }
 
   sync_crossings_on_sequence_grab_end (self, entry);
 
