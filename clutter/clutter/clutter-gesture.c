@@ -1728,3 +1728,52 @@ clutter_gesture_recognize_independently_from (ClutterGesture *self,
                      (GWeakNotify) other_gesture_disposed,
                      priv->recognize_independently_from);
 }
+
+void
+clutter_gesture_relationships_changed (ClutterGesture *self)
+{
+  ClutterGesturePrivate *priv;
+  GHashTableIter iter;
+  ClutterGesture *other_gesture;
+  ClutterActor *actor;
+  ClutterStage *stage;
+
+  g_return_if_fail (CLUTTER_IS_GESTURE (self));
+
+  priv = clutter_gesture_get_instance_private (self);
+
+  g_hash_table_iter_init (&iter, priv->in_relationship_with);
+  while (g_hash_table_iter_next (&iter, (gpointer *) &other_gesture, NULL))
+    {
+      ClutterGesturePrivate *other_priv =
+        clutter_gesture_get_instance_private (other_gesture);
+
+      g_assert (g_hash_table_remove (other_priv->in_relationship_with, self));
+
+      g_ptr_array_remove (other_priv->cancel_on_recognizing, self);
+      g_ptr_array_remove (other_priv->inhibit_until_cancelled, self);
+
+      g_hash_table_iter_remove (&iter);
+    }
+
+  g_ptr_array_set_size (priv->cancel_on_recognizing, 0);
+  g_ptr_array_set_size (priv->inhibit_until_cancelled, 0);
+
+  priv->inhibited_count = 0;
+
+
+  actor = clutter_actor_meta_get_actor (CLUTTER_ACTOR_META (self));
+  stage = CLUTTER_STAGE (clutter_actor_get_stage (actor));
+
+  if (stage)
+    {
+      unsigned int i;
+
+      for (i = 0; i < priv->points->len; i++)
+        {
+          GesturePointPrivate *point = &g_array_index (priv->points, GesturePointPrivate, i);
+
+          clutter_stage_redo_relationship_setup (stage, point->device, point->sequence);
+        }
+    }
+}

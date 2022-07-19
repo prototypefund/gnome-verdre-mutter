@@ -4501,3 +4501,41 @@ clutter_stage_set_sequence_claimed_by_gesture (ClutterStage         *self,
 
   send_implicit_grab_crossing (self, entry, TRUE);
 }
+
+static void
+setup_sequence_actions_special (GPtrArray          *actions,
+                        ClutterInputDevice   *device,
+                                                    ClutterEventSequence *sequence)
+{
+  unsigned int i, j;
+
+  for (i = 0; i < actions->len; i++)
+    {
+      ClutterAction *action_1 = g_ptr_array_index (actions, i);
+
+      for (j = i + 1; j < actions->len; j++)
+        {
+          ClutterAction *action_2 = g_ptr_array_index (actions, j);
+          clutter_action_setup_sequence_relationship (action_1, action_2, device, sequence);
+        }
+    }
+}
+
+void
+clutter_stage_redo_relationship_setup (ClutterStage         *self,
+                                                    ClutterInputDevice   *device,
+                                                    ClutterEventSequence *sequence)
+{
+  ClutterStagePrivate *priv = self->priv;
+  PointerDeviceEntry *entry;
+
+  if (sequence != NULL)
+    entry = g_hash_table_lookup (priv->touch_sequences, sequence);
+  else
+    entry = g_hash_table_lookup (priv->pointer_devices, device);
+
+  g_assert (entry->press_count > 0);
+
+
+      setup_sequence_actions_special (entry->event_actions, device, sequence);
+}
