@@ -234,6 +234,11 @@ points_began (ClutterGesture             *gesture,
   if (total_n_points < priv->min_n_points)
     return;
 
+  if (priv->min_n_points > 1) {
+g_warning("PAN: telling relationships changed");
+    clutter_gesture_relationships_changed (gesture);
+}
+
   if (clutter_gesture_get_state (gesture) == CLUTTER_GESTURE_STATE_POSSIBLE &&
       priv->max_n_points != 0 && total_n_points > priv->max_n_points)
     {
