@@ -4764,3 +4764,51 @@ clutter_stage_sequence_handled_by_action (ClutterStage         *self,
 
   entry->action_controls_crossings = TRUE;
 }
+
+static void
+setup_sequence_actions_special (GArray *emission_chain,
+                        ClutterInputDevice   *device,
+                                                    ClutterEventSequence *sequence)
+{
+  unsigned int i, j;
+
+  for (i = 0; i < emission_chain->len; i++)
+    {
+      EventReceiver *receiver_1 = &g_array_index (emission_chain, EventReceiver, i);
+
+      if (!receiver_1->action)
+        continue;
+
+      for (j = i + 1; j < emission_chain->len; j++)
+        {
+          EventReceiver *receiver_2 = &g_array_index (emission_chain, EventReceiver, j);
+
+          if (!receiver_2->action)
+            continue;
+
+          clutter_action_setup_sequence_relationship (receiver_1->action,
+                                                      receiver_2->action,
+                                                      device,
+                                                      sequence);
+        }
+    }
+}
+
+void
+clutter_stage_redo_relationship_setup (ClutterStage         *self,
+                                                    ClutterInputDevice   *device,
+                                                    ClutterEventSequence *sequence)
+{
+  ClutterStagePrivate *priv = self->priv;
+  PointerDeviceEntry *entry;
+
+  if (sequence != NULL)
+    entry = g_hash_table_lookup (priv->touch_sequences, sequence);
+  else
+    entry = g_hash_table_lookup (priv->pointer_devices, device);
+
+  g_assert (entry->press_count > 0);
+
+
+      setup_sequence_actions_special (entry->event_emission_chain, device, sequence);
+}

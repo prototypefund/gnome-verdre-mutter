@@ -210,4 +210,7 @@ CLUTTER_EXPORT
 void clutter_gesture_recognize_independently_from (ClutterGesture *self,
                                                    ClutterGesture *other_gesture);
 
+CLUTTER_EXPORT
+void clutter_gesture_relationships_changed (ClutterGesture *self);
+
 #endif /* __CLUTTER_GESTURE_H__ */

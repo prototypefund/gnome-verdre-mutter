@@ -174,6 +174,10 @@ void clutter_stage_sequence_handled_by_action (ClutterStage         *self,
                                                ClutterInputDevice   *device,
                                                ClutterEventSequence *sequence);
 
+void clutter_stage_redo_relationship_setup (ClutterStage         *self,
+                                                    ClutterInputDevice   *device,
+                                                    ClutterEventSequence *sequence);
+
 G_END_DECLS
 
 #endif /* __CLUTTER_STAGE_PRIVATE_H__ */
