@@ -624,8 +624,8 @@ _clutter_stage_queue_event (ClutterStage *stage,
 
   if (first_event)
     {
-      gboolean compressible = event->type == CLUTTER_MOTION ||
-                              event->type == CLUTTER_TOUCH_UPDATE;
+      gboolean compressible = event->type == CLUTTER_MOTION/* ||
+                              event->type == CLUTTER_TOUCH_UPDATE*/;
 
       if (!compressible)
         {
@@ -740,7 +740,7 @@ _clutter_stage_process_queued_events (ClutterStage *stage)
                 clutter_stage_compress_motion (stage, next_event, event);
 
               goto next_event;
-            }
+            }/*
           else if (event->type == CLUTTER_TOUCH_UPDATE &&
                    next_event->type == CLUTTER_TOUCH_UPDATE &&
                    event->touch.sequence == next_event->touch.sequence &&
@@ -751,7 +751,7 @@ _clutter_stage_process_queued_events (ClutterStage *stage)
                             (int) event->touch.x,
                             (int) event->touch.y);
               goto next_event;
-            }
+            }*/
         }
 
       _clutter_process_event (event);
