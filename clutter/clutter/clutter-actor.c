@@ -1691,8 +1691,8 @@ clutter_actor_real_unmap (ClutterActor *self)
       /* clear the contents of the last paint volume, so that hiding + moving +
        * showing will not result in the wrong area being repainted
        */
-//     _clutter_paint_volume_init_static (&priv->last_paint_volume, NULL);
-  //    priv->last_paint_volume_valid = TRUE;
+      _clutter_paint_volume_init_static (&priv->last_paint_volume, NULL);
+      priv->last_paint_volume_valid = TRUE;
 
       if (priv->parent && !CLUTTER_ACTOR_IN_DESTRUCTION (priv->parent))
         {
@@ -3483,18 +3483,19 @@ _clutter_actor_update_last_paint_volume (ClutterActor *self)
   ClutterActorPrivate *priv = self->priv;
   const ClutterPaintVolume *pv;
 
-  if (priv->reuse_last_pv)
-    return;
+ // if (priv->reuse_last_pv)
+   // return;
 
   priv->reuse_last_pv = TRUE;
 
   if (priv->last_paint_volume_valid)
     {
-      //clutter_paint_volume_free (&priv->last_paint_volume);
+      clutter_paint_volume_free (&priv->last_paint_volume);
       priv->last_paint_volume_valid = FALSE;
     }
 
-  pv = _clutter_actor_get_paint_volume_mutable (self);
+//  pv = _clutter_actor_get_paint_volume_mutable (self);
+  pv = clutter_actor_get_paint_volume (self);
   if (!pv)
     {
       CLUTTER_NOTE (CLIPPING, "Bail from update_last_paint_volume (%s): "
@@ -15704,7 +15705,7 @@ clutter_actor_finish_layout (ClutterActor *self,
       CLUTTER_ACTOR_IN_DESTRUCTION (self))
     return;
 
-  if (priv->child_geometry_changed || !priv->reuse_last_pv) {
+//  if (priv->child_geometry_changed) {
     _clutter_actor_update_last_paint_volume (self);
 
     if (priv->needs_update_stage_views)
@@ -15717,7 +15718,7 @@ clutter_actor_finish_layout (ClutterActor *self,
 
     for (child = priv->first_child; child; child = child->priv->next_sibling)
       clutter_actor_finish_layout (child, use_max_scale);
-  }
+  //}
 }
 
 /**
