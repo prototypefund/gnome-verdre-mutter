@@ -19119,7 +19119,7 @@ clutter_actor_collect_event_actors (ClutterActor *self,
 
       if (CLUTTER_ACTOR_IS_REACTIVE (iter) || /* an actor must be reactive */
           parent == NULL)                     /* unless it's the stage */
-        g_ptr_array_add (actors, g_object_ref (iter));
+        g_ptr_array_add (actors, iter);
 
       if (iter == self)
         {
@@ -19137,7 +19137,7 @@ clutter_actor_collect_event_actors (ClutterActor *self,
   if (!in_root)
     {
       g_ptr_array_remove_range (actors, 0, actors->len);
-      g_ptr_array_add (actors, g_object_ref (self));
+      g_ptr_array_add (actors, self);
     }
 }
 

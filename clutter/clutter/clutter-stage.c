@@ -93,6 +93,14 @@ typedef struct _PickClipRecord
   graphene_point_t vertex[4];
 } PickClipRecord;
 
+typedef struct _EventReceiver
+{
+  ClutterActor *actor;
+  gboolean actor_capture;
+
+  ClutterAction *action;
+} EventReceiver;
+
 typedef struct _PointerDeviceEntry
 {
   ClutterStage *stage;
@@ -101,6 +109,10 @@ typedef struct _PointerDeviceEntry
   graphene_point_t coords;
   ClutterActor *current_actor;
   cairo_region_t *clear_area;
+
+  unsigned int press_count;
+  ClutterActor *sequence_grab_actor;
+  GArray *event_emission_chain;
 } PointerDeviceEntry;
 
 struct _ClutterStagePrivate
@@ -122,6 +134,7 @@ struct _ClutterStagePrivate
 
   GQueue *event_queue;
   GPtrArray *cur_event_actors;
+  GArray *cur_event_emission_chain;
 
   GArray *paint_volume_stack;
 
@@ -182,6 +195,7 @@ static const ClutterColor default_stage_color = { 255, 255, 255, 255 };
 
 static void free_queue_redraw_entry (QueueRedrawEntry *entry);
 static void free_pointer_device_entry (PointerDeviceEntry *entry);
+static void free_event_receiver (EventReceiver *receiver);
 static void clutter_stage_update_view_perspective (ClutterStage *stage);
 static void clutter_stage_set_viewport (ClutterStage *stage,
                                         float         width,
@@ -1219,6 +1233,8 @@ clutter_stage_finalize (GObject *object)
 
   g_assert (priv->cur_event_actors->len == 0);
   g_ptr_array_free (priv->cur_event_actors, TRUE);
+  g_assert (priv->cur_event_emission_chain->len == 0);
+  g_array_unref (priv->cur_event_emission_chain);
 
   g_hash_table_destroy (priv->pointer_devices);
   g_hash_table_destroy (priv->touch_sequences);
@@ -1560,8 +1576,10 @@ clutter_stage_init (ClutterStage *self)
 
   priv->event_queue = g_queue_new ();
   priv->cur_event_actors = g_ptr_array_sized_new (32);
-  g_ptr_array_set_free_func (priv->cur_event_actors,
-                             (GDestroyNotify) g_object_unref);
+  priv->cur_event_emission_chain =
+    g_array_sized_new (FALSE, TRUE, sizeof (EventReceiver), 32);
+  g_array_set_clear_func (priv->cur_event_emission_chain,
+                          (GDestroyNotify) free_event_receiver);
 
   priv->pointer_devices =
     g_hash_table_new_full (NULL, NULL,
@@ -3209,6 +3227,10 @@ free_pointer_device_entry (PointerDeviceEntry *entry)
 
   g_clear_pointer (&entry->clear_area, cairo_region_destroy);
 
+  g_assert (!entry->press_count);
+  g_assert (entry->event_emission_chain->len == 0);
+  g_array_unref (entry->event_emission_chain);
+
   g_free (entry);
 }
 
@@ -3242,6 +3264,12 @@ clutter_stage_update_device_entry (ClutterStage         *self,
       entry->stage = self;
       entry->device = device;
       entry->sequence = sequence;
+      entry->press_count = 0;
+      entry->sequence_grab_actor = NULL;
+      entry->event_emission_chain =
+        g_array_sized_new (FALSE, TRUE, sizeof (EventReceiver), 32);
+      g_array_set_clear_func (entry->event_emission_chain,
+                              (GDestroyNotify) free_event_receiver);
     }
 
   entry->coords = coords;
@@ -3401,6 +3429,81 @@ create_crossing_event (ClutterStage         *stage,
   return event;
 }
 
+static inline void
+add_actor_to_event_emission_chain (GArray       *chain,
+                                   ClutterActor *actor,
+                                   gboolean      capture)
+{
+  EventReceiver *receiver;
+
+  g_array_set_size (chain, chain->len + 1);
+  receiver = &g_array_index (chain, EventReceiver, chain->len - 1);
+
+  receiver->actor = g_object_ref (actor);
+  receiver->actor_capture = capture;
+}
+
+static inline void
+add_action_to_event_emission_chain (GArray        *chain,
+                                    ClutterAction *action)
+{
+  EventReceiver *receiver;
+
+  g_array_set_size (chain, chain->len + 1);
+  receiver = &g_array_index (chain, EventReceiver, chain->len - 1);
+
+  receiver->action = g_object_ref (action);
+}
+
+static void
+create_event_emission_chain (ClutterStage *stage,
+                             GArray       *chain,
+                             ClutterActor *topmost,
+                             ClutterActor *deepmost)
+{
+  ClutterStagePrivate *priv = stage->priv;
+  int i;
+
+  g_assert (priv->cur_event_actors->len == 0);
+  clutter_actor_collect_event_actors (topmost, deepmost, priv->cur_event_actors);
+
+  for (i = priv->cur_event_actors->len - 1; i >= 0; i--)
+    {
+      ClutterActor *actor = g_ptr_array_index (priv->cur_event_actors, i);
+      const GList *l;
+
+      for (l = clutter_actor_peek_actions (actor); l; l = l->next)
+        {
+          ClutterAction *action = l->data;
+
+          if (clutter_actor_meta_get_enabled (CLUTTER_ACTOR_META (action)) &&
+              clutter_action_get_phase (action) == CLUTTER_PHASE_CAPTURE)
+            add_action_to_event_emission_chain (chain, action);
+        }
+
+      add_actor_to_event_emission_chain (chain, actor, TRUE);
+    }
+
+  for (i = 0; i < priv->cur_event_actors->len; i++)
+    {
+      ClutterActor *actor = g_ptr_array_index (priv->cur_event_actors, i);
+      const GList *l;
+
+      for (l = clutter_actor_peek_actions (actor); l; l = l->next)
+        {
+          ClutterAction *action = l->data;
+
+          if (clutter_actor_meta_get_enabled (CLUTTER_ACTOR_META (action)) &&
+              clutter_action_get_phase (action) == CLUTTER_PHASE_BUBBLE)
+            add_action_to_event_emission_chain (chain, action);
+        }
+
+      add_actor_to_event_emission_chain (chain, actor, FALSE);
+    }
+
+  priv->cur_event_actors->len = 0;
+}
+
 typedef enum
 {
   EVENT_NOT_HANDLED,
@@ -3410,48 +3513,25 @@ typedef enum
 
 static EventHandledState
 emit_event (const ClutterEvent *event,
-            GPtrArray          *actors)
+            GArray             *event_emission_chain)
 {
-  int i;
+  unsigned int i;
 
-  /* Capture: from top-level downwards */
-  for (i = actors->len - 1; i >= 0; i--)
+  for (i = 0; i < event_emission_chain->len; i++)
     {
-      ClutterActor *actor = g_ptr_array_index (actors, i);
-      const GList *l;
+      EventReceiver *receiver =
+        &g_array_index (event_emission_chain, EventReceiver, i);
 
-      for (l = clutter_actor_peek_actions (actor); l; l = l->next)
+      if (receiver->actor)
         {
-          ClutterAction *action = l->data;
-
-          if (clutter_actor_meta_get_enabled (CLUTTER_ACTOR_META (action)) &&
-              clutter_action_get_phase (action) == CLUTTER_PHASE_CAPTURE &&
-              clutter_action_handle_event (action, event))
+          if (clutter_actor_event (receiver->actor, event, receiver->actor_capture))
+            return EVENT_HANDLED_BY_ACTOR;
+        }
+      else if (receiver->action)
+        {
+          if (clutter_action_handle_event (receiver->action, event))
             return EVENT_HANDLED_BY_ACTION;
         }
-
-      if (clutter_actor_event (actor, event, TRUE))
-        return EVENT_HANDLED_BY_ACTOR;
-    }
-
-  /* Bubble: from source upwards */
-  for (i = 0; i < actors->len; i++)
-    {
-      ClutterActor *actor = g_ptr_array_index (actors, i);
-      const GList *l;
-
-      for (l = clutter_actor_peek_actions (actor); l; l = l->next)
-        {
-          ClutterAction *action = l->data;
-
-          if (clutter_actor_meta_get_enabled (CLUTTER_ACTOR_META (action)) &&
-              clutter_action_get_phase (action) == CLUTTER_PHASE_BUBBLE &&
-              clutter_action_handle_event (action, event))
-            return EVENT_HANDLED_BY_ACTION;
-        }
-
-      if (clutter_actor_event (actor, event, FALSE))
-        return EVENT_HANDLED_BY_ACTOR;
     }
 
   return EVENT_NOT_HANDLED;
@@ -3464,36 +3544,100 @@ clutter_stage_emit_crossing_event (ClutterStage       *self,
                                    ClutterActor       *topmost)
 {
   ClutterStagePrivate *priv = self->priv;
-  gboolean in_event_emission;
-  GPtrArray *event_actors;
+  ClutterInputDevice *device = clutter_event_get_device (event);
+  ClutterEventSequence *sequence = clutter_event_get_event_sequence (event);
+  PointerDeviceEntry *entry;
 
   if (topmost == NULL)
     topmost = CLUTTER_ACTOR (self);
 
-  /* Crossings can happen while we're in the middle of event emission
-   * (for example when an actor goes unmapped or gets grabbed), so we
-   * can't reuse our priv->cur_event_actors here, it might already be in use.
-   */
-  in_event_emission = priv->cur_event_actors->len != 0;
+  if (sequence != NULL)
+    entry = g_hash_table_lookup (priv->touch_sequences, sequence);
+  else
+    entry = g_hash_table_lookup (priv->pointer_devices, device);
 
-  if (in_event_emission)
+  g_assert (entry != NULL);
+
+  if (entry->press_count &&
+      !(clutter_event_get_flags (event) & CLUTTER_EVENT_FLAG_GRAB_NOTIFY))
     {
-      event_actors = g_ptr_array_sized_new (16);
-      g_ptr_array_set_free_func (event_actors, g_object_unref);
+      emit_event (event, entry->event_emission_chain);
     }
   else
     {
-      event_actors = priv->cur_event_actors;
+      gboolean in_event_emission;
+      GArray *event_emission_chain;
+
+      /* Crossings can happen while we're in the middle of event emission
+       * (for example when an actor goes unmapped or gets grabbed), so we
+       * can't reuse priv->cur_event_emission_chain here, it might already be in use.
+       */
+      in_event_emission = priv->cur_event_emission_chain->len != 0;
+
+      if (in_event_emission)
+        {
+          event_emission_chain =
+            g_array_sized_new (FALSE, TRUE, sizeof (EventReceiver), 16);
+          g_array_set_clear_func (event_emission_chain,
+                                  (GDestroyNotify) free_event_receiver);
+        }
+      else
+        {
+          event_emission_chain = priv->cur_event_emission_chain;
+        }
+
+      create_event_emission_chain (self, event_emission_chain, topmost, deepmost);
+
+      g_warn_if_fail (emit_event (event, event_emission_chain) == EVENT_NOT_HANDLED);
+
+      if (in_event_emission)
+        g_array_unref (event_emission_chain);
+      else
+        g_array_remove_range (priv->cur_event_emission_chain, 0, priv->cur_event_emission_chain->len);
+    }
+}
+
+static void
+sync_crossings_on_sequence_grab_end (ClutterStage       *self,
+                                     PointerDeviceEntry *entry)
+{
+  ClutterActor *deepmost, *topmost;
+  ClutterActor *parent;
+  ClutterEvent *crossing;
+
+  deepmost = entry->current_actor;
+
+  if (clutter_actor_contains (entry->current_actor, entry->sequence_grab_actor))
+    return;
+
+  topmost = entry->current_actor;
+  while ((parent = clutter_actor_get_parent (topmost)))
+    {
+      if (clutter_actor_contains (parent, entry->sequence_grab_actor))
+        break;
+
+      topmost = parent;
     }
 
-  clutter_actor_collect_event_actors (topmost, deepmost, event_actors);
+  crossing = create_crossing_event (self,
+                                    entry->device,
+                                    entry->sequence,
+                                    CLUTTER_ENTER,
+                                    CLUTTER_EVENT_FLAG_GRAB_NOTIFY,
+                                    entry->current_actor,
+                                    NULL,
+                                    entry->coords,
+                                    CLUTTER_CURRENT_TIME);
 
-  g_warn_if_fail (emit_event (event, event_actors) == EVENT_NOT_HANDLED);
+  if (!_clutter_event_process_filters (crossing, deepmost))
+    {
+      clutter_stage_emit_crossing_event (self,
+                                         crossing,
+                                         deepmost,
+                                         topmost);
+    }
 
-  if (in_event_emission)
-    g_ptr_array_free (event_actors, TRUE);
-  else
-    g_ptr_array_remove_range (priv->cur_event_actors, 0, priv->cur_event_actors->len);
+  clutter_event_free (crossing);
 }
 
 void
@@ -4094,6 +4238,124 @@ clutter_stage_get_event_actor (ClutterStage       *stage,
   return NULL;
 }
 
+static void
+free_event_receiver (EventReceiver *receiver)
+{
+  g_clear_object (&receiver->actor);
+  g_clear_object (&receiver->action);
+}
+
+static void
+remove_all_actors_from_chain (PointerDeviceEntry *entry)
+{
+  unsigned int i;
+
+  for (i = 0; i < entry->event_emission_chain->len; i++)
+    {
+      EventReceiver *receiver =
+        &g_array_index (entry->event_emission_chain, EventReceiver, i);
+
+      if (receiver->actor)
+        g_clear_object (&receiver->actor);
+    }
+}
+
+static gboolean
+setup_sequence_grab (PointerDeviceEntry *entry)
+{
+  /* With a mouse, it's possible to press two buttons at the same time,
+   * We ignore the second BUTTON_PRESS event here, and we'll release the
+   * implicit grab on the BUTTON_RELEASE of the second press.
+   */
+  if (entry->sequence == NULL && entry->press_count)
+    {
+      entry->press_count++;
+      return FALSE;
+    }
+
+  g_assert (entry->press_count == 0);
+  g_assert (entry->event_emission_chain->len == 0);
+
+  entry->press_count = 1;
+  return TRUE;
+}
+
+static gboolean
+release_sequence_grab (PointerDeviceEntry *entry)
+{
+  if (!entry->press_count)
+    return FALSE;
+
+  /* See comment in setup_sequence_grab() */
+  if (entry->sequence == NULL && entry->press_count > 1)
+    {
+      entry->press_count--;
+      return FALSE;
+    }
+
+  g_assert (entry->press_count == 1);
+
+  entry->press_count = 0;
+  return TRUE;
+}
+
+static void
+sequence_grab_actor_mapped_changed (ClutterActor       *actor,
+                                    GParamSpec         *spec,
+                                    PointerDeviceEntry *entry)
+{
+  if (CLUTTER_ACTOR_IS_MAPPED (actor))
+    return;
+
+  remove_all_actors_from_chain (entry);
+}
+
+static void
+sequence_grab_actor_destroyed (ClutterActor       *actor,
+                               PointerDeviceEntry *entry)
+{
+  /* Remove only actors from the implicit grab when an actor in the implicit
+   * grab chain goes away. The stage holds references to all the grabbed actions,
+   * and we continue emitting sequence events to them until the sequence ends.
+   * Of course actions can choose to ignore them now that their actor is
+   * unmapped.
+   */
+  remove_all_actors_from_chain (entry);
+}
+
+void
+clutter_stage_maybe_lost_sequence_grab (ClutterStage         *self,
+                                        ClutterInputDevice   *device,
+                                        ClutterEventSequence *sequence)
+{
+  ClutterStagePrivate *priv = self->priv;
+  PointerDeviceEntry *entry = NULL;
+
+  if (sequence != NULL)
+    entry = g_hash_table_lookup (priv->touch_sequences, sequence);
+  else
+    entry = g_hash_table_lookup (priv->pointer_devices, device);
+
+  g_assert (entry != NULL);
+
+  if (!entry->press_count)
+    return;
+
+  sync_crossings_on_sequence_grab_end (self, entry);
+
+  g_signal_handlers_disconnect_by_func (entry->sequence_grab_actor,
+                                        G_CALLBACK (sequence_grab_actor_destroyed),
+                                        entry);
+  g_signal_handlers_disconnect_by_func (entry->sequence_grab_actor,
+                                        G_CALLBACK (sequence_grab_actor_mapped_changed),
+                                        entry);
+  entry->sequence_grab_actor = NULL;
+  g_array_remove_range (entry->event_emission_chain, 0,
+                        entry->event_emission_chain->len);
+
+  entry->press_count = 0;
+}
+
 void
 clutter_stage_emit_event (ClutterStage       *self,
                           const ClutterEvent *event)
@@ -4103,6 +4365,7 @@ clutter_stage_emit_event (ClutterStage       *self,
   ClutterEventSequence *sequence = clutter_event_get_event_sequence (event);
   PointerDeviceEntry *entry;
   ClutterActor *target_actor = NULL, *seat_grab_actor = NULL;
+  gboolean is_sequence_begin, is_sequence_end;
 
   if (sequence != NULL)
     entry = g_hash_table_lookup (priv->touch_sequences, sequence);
@@ -4170,10 +4433,50 @@ clutter_stage_emit_event (ClutterStage       *self,
   g_assert (target_actor != NULL);
   seat_grab_actor = priv->topmost_grab ? priv->topmost_grab->actor : CLUTTER_ACTOR (self);
 
-  clutter_actor_collect_event_actors (seat_grab_actor, target_actor, priv->cur_event_actors);
+  is_sequence_begin =
+    event->type == CLUTTER_BUTTON_PRESS || event->type == CLUTTER_TOUCH_BEGIN;
+  is_sequence_end =
+    event->type == CLUTTER_BUTTON_RELEASE || event->type == CLUTTER_TOUCH_END ||
+    event->type == CLUTTER_TOUCH_CANCEL;
 
-  emit_event (event, priv->cur_event_actors);
+  if (is_sequence_begin && setup_sequence_grab (entry))
+    {
+      g_assert (entry->sequence_grab_actor == NULL);
+      entry->sequence_grab_actor = target_actor;
+      g_signal_connect (entry->sequence_grab_actor, "notify::mapped",
+                        G_CALLBACK (sequence_grab_actor_mapped_changed), entry);
+      g_signal_connect (entry->sequence_grab_actor, "destroy",
+                        G_CALLBACK (sequence_grab_actor_destroyed), entry);
 
-  g_ptr_array_remove_range (priv->cur_event_actors, 0,
-                            priv->cur_event_actors->len);
+      create_event_emission_chain (self, entry->event_emission_chain, seat_grab_actor, target_actor);
+    }
+
+  if (entry && entry->press_count)
+    {
+      emit_event (event, entry->event_emission_chain);
+    }
+  else
+    {
+      create_event_emission_chain (self, priv->cur_event_emission_chain, seat_grab_actor, target_actor);
+
+      emit_event (event, priv->cur_event_emission_chain);
+
+      g_array_remove_range (priv->cur_event_emission_chain, 0, priv->cur_event_emission_chain->len);
+    }
+
+  if (is_sequence_end && release_sequence_grab (entry))
+    {
+      /* Sync crossings after the sequence grab for mice */
+      if (event->type == CLUTTER_BUTTON_RELEASE)
+        sync_crossings_on_sequence_grab_end (self, entry);
+
+      g_signal_handlers_disconnect_by_func (entry->sequence_grab_actor,
+                                            G_CALLBACK (sequence_grab_actor_destroyed),
+                                            entry);
+      g_signal_handlers_disconnect_by_func (entry->sequence_grab_actor,
+                                            G_CALLBACK (sequence_grab_actor_mapped_changed),
+                                            entry);
+      entry->sequence_grab_actor = NULL;
+      g_array_remove_range (entry->event_emission_chain, 0, entry->event_emission_chain->len);
+    }
 }
