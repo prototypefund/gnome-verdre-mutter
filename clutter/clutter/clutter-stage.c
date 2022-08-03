@@ -100,6 +100,9 @@ typedef struct _PointerDeviceEntry
   graphene_point_t coords;
   ClutterActor *current_actor;
   cairo_region_t *clear_area;
+
+  unsigned int press_count;
+  GPtrArray *event_actors;
 } PointerDeviceEntry;
 
 struct _ClutterStagePrivate
@@ -3223,6 +3226,10 @@ free_pointer_device_entry (PointerDeviceEntry *entry)
 
   g_clear_pointer (&entry->clear_area, cairo_region_destroy);
 
+  g_assert (!entry->press_count);
+  g_assert (entry->event_actors->len == 0);
+  g_ptr_array_free (entry->event_actors, TRUE);
+
   g_free (entry);
 }
 
@@ -3256,6 +3263,10 @@ clutter_stage_update_device_entry (ClutterStage         *self,
       entry->stage = self;
       entry->device = device;
       entry->sequence = sequence;
+      entry->press_count = 0;
+      entry->event_actors = g_ptr_array_sized_new (32);
+      g_ptr_array_set_free_func (entry->event_actors,
+                                 (GDestroyNotify) g_object_unref);
     }
 
   entry->coords = coords;
@@ -3439,23 +3450,71 @@ clutter_stage_emit_crossing_event (ClutterStage       *self,
                                    ClutterActor       *deepmost,
                                    ClutterActor       *topmost)
 {
-  GPtrArray *event_actors;
+  ClutterStagePrivate *priv = self->priv;
+  ClutterInputDevice *device = clutter_event_get_device (event);
+  ClutterEventSequence *sequence = clutter_event_get_event_sequence (event);
+  PointerDeviceEntry *entry;
 
   if (topmost == NULL)
     topmost = CLUTTER_ACTOR (self);
 
-  /* Crossings can happen while we're in the middle of event emission
-   * (for example when an actor goes unmapped or gets grabbed), so we
-   * can't reuse our priv->cur_event_actors here, it might already be in use.
-   */
-  event_actors = g_ptr_array_sized_new (16);
-  g_ptr_array_set_free_func (event_actors, (GDestroyNotify) g_object_unref);
+  if (sequence != NULL)
+    entry = g_hash_table_lookup (priv->touch_sequences, sequence);
+  else
+    entry = g_hash_table_lookup (priv->pointer_devices, device);
 
-  clutter_actor_collect_event_actors (topmost, deepmost, event_actors);
+  g_assert (entry != NULL);
 
-  emit_event_on_actors (event, event_actors);
+  if (entry->press_count)
+    {
+      emit_event_on_actors (event, entry->event_actors);
+    }
+  else
+    {
+      GPtrArray *event_actors;
 
-  g_ptr_array_free (event_actors, TRUE);
+      /* Crossings can happen while we're in the middle of event emission
+       * (for example when an actor goes unmapped or gets grabbed), so we
+       * can't reuse our priv->cur_event_actors here, it might already be in use.
+       */
+      event_actors = g_ptr_array_sized_new (16);
+      g_ptr_array_set_free_func (event_actors, (GDestroyNotify) g_object_unref);
+
+      clutter_actor_collect_event_actors (topmost, deepmost, event_actors);
+
+      emit_event_on_actors (event, event_actors);
+
+      g_ptr_array_free (event_actors, TRUE);
+    }
+}
+
+static void
+send_implicit_grab_crossing (ClutterStage       *self,
+                             PointerDeviceEntry *entry,
+                             gboolean            grabbed)
+{
+  ClutterStagePrivate *priv = self->priv;
+  ClutterEvent *crossing;
+  ClutterActor *seat_grab_actor =
+    priv->topmost_grab ? priv->topmost_grab->actor : CLUTTER_ACTOR (self);
+
+  crossing = create_crossing_event (self,
+                                    entry->device,
+                                    entry->sequence,
+                                    grabbed ? CLUTTER_LEAVE : CLUTTER_ENTER,
+                                    0,
+                                    entry->current_actor,
+                                    NULL,
+                                    entry->coords,
+                                    CLUTTER_CURRENT_TIME);
+
+  clutter_actor_collect_event_actors (seat_grab_actor, entry->current_actor, priv->cur_event_actors);
+
+  emit_event_on_actors (crossing, priv->cur_event_actors);
+  clutter_event_free (crossing);
+
+  g_ptr_array_remove_range (priv->cur_event_actors, 0,
+                            priv->cur_event_actors->len);
 }
 
 void
@@ -4056,6 +4115,69 @@ clutter_stage_get_event_actor (ClutterStage       *stage,
   return NULL;
 }
 
+static gboolean
+setup_sequence_grab (PointerDeviceEntry *entry)
+{
+  /* With a mouse, it's possible to press two buttons at the same time,
+   * We ignore the second BUTTON_PRESS event here, and we'll release the
+   * implicit grab on the BUTTON_RELEASE of the second press.
+   */
+  if (entry->sequence == NULL && entry->press_count)
+    {
+      entry->press_count++;
+      return FALSE;
+    }
+
+  g_assert (entry->press_count == 0);
+  g_assert (entry->event_actors->len == 0);
+
+  entry->press_count = 1;
+  return TRUE;
+}
+
+static gboolean
+release_sequence_grab (PointerDeviceEntry *entry)
+{
+  if (!entry->press_count)
+    return FALSE;
+
+  /* See comment in setup_sequence_grab() */
+  if (entry->sequence == NULL && entry->press_count > 1)
+    {
+      entry->press_count--;
+      return FALSE;
+    }
+
+  g_assert (entry->press_count == 1);
+
+  entry->press_count = 0;
+  return TRUE;
+}
+
+void
+clutter_stage_maybe_lost_sequence_grab (ClutterStage         *self,
+                                        ClutterInputDevice   *device,
+                                        ClutterEventSequence *sequence)
+{
+  ClutterStagePrivate *priv = self->priv;
+  PointerDeviceEntry *entry = NULL;
+
+  if (sequence != NULL)
+    entry = g_hash_table_lookup (priv->touch_sequences, sequence);
+  else
+    entry = g_hash_table_lookup (priv->pointer_devices, device);
+
+  g_assert (entry != NULL);
+
+  if (!entry->press_count)
+    return;
+
+  g_ptr_array_remove_range (entry->event_actors, 0,
+                            entry->event_actors->len);
+
+  release_sequence_grab (entry);
+}
+
 void
 clutter_stage_emit_event (ClutterStage       *self,
                           const ClutterEvent *event)
@@ -4065,6 +4187,7 @@ clutter_stage_emit_event (ClutterStage       *self,
   ClutterEventSequence *sequence = clutter_event_get_event_sequence (event);
   PointerDeviceEntry *entry;
   ClutterActor *target_actor = NULL, *seat_grab_actor = NULL;
+  gboolean is_sequence_begin, is_sequence_end;
 
   if (sequence != NULL)
     entry = g_hash_table_lookup (priv->touch_sequences, sequence);
@@ -4130,14 +4253,39 @@ clutter_stage_emit_event (ClutterStage       *self,
     }
 
   g_assert (target_actor != NULL);
-  seat_grab_actor = clutter_stage_get_grab_actor (self);
-  if (!seat_grab_actor)
-    seat_grab_actor = CLUTTER_ACTOR (self);
+  seat_grab_actor = priv->topmost_grab ? priv->topmost_grab->actor : CLUTTER_ACTOR (self);
 
-  clutter_actor_collect_event_actors (seat_grab_actor, target_actor, priv->cur_event_actors);
+  is_sequence_begin =
+    event->type == CLUTTER_BUTTON_PRESS || event->type == CLUTTER_TOUCH_BEGIN;
+  is_sequence_end =
+    event->type == CLUTTER_BUTTON_RELEASE || event->type == CLUTTER_TOUCH_END ||
+    event->type == CLUTTER_TOUCH_CANCEL;
 
-  emit_event_on_actors (event, priv->cur_event_actors);
+  if (is_sequence_begin && setup_sequence_grab (entry))
+    {
+      clutter_actor_collect_event_actors (seat_grab_actor, target_actor, entry->event_actors);
+    }
 
-  g_ptr_array_remove_range (priv->cur_event_actors, 0,
-                            priv->cur_event_actors->len);
+  if (entry && entry->press_count)
+    {
+      emit_event_on_actors (event, entry->event_actors);
+    }
+  else
+    {
+      clutter_actor_collect_event_actors (seat_grab_actor, target_actor, priv->cur_event_actors);
+
+      emit_event_on_actors (event, priv->cur_event_actors);
+
+      g_ptr_array_remove_range (priv->cur_event_actors, 0,
+                                priv->cur_event_actors->len);
+    }
+
+  if (is_sequence_end && release_sequence_grab (entry))
+    {
+      g_ptr_array_remove_range (entry->event_actors, 0, entry->event_actors->len);
+
+      /* Sync recognizing state after the sequence grab for mice */
+      if (event->type == CLUTTER_BUTTON_RELEASE)
+        send_implicit_grab_crossing (self, entry, FALSE);
+    }
 }
