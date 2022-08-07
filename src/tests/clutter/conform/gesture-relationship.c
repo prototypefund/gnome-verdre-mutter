@@ -49,6 +49,39 @@ emit_event_and_wait (ClutterStage     *stage,
     g_main_context_iteration (NULL, FALSE);
 }
 
+#if 0
+static void
+emit_touch_event_and_wait (ClutterStage     *stage,
+                           gboolean         *was_presented,
+                           ClutterEventType  type,
+                           int               touch_sequence,
+                           float             x,
+                           float             y)
+{
+  ClutterSeat *seat =
+    clutter_backend_get_default_seat (clutter_get_default_backend ());
+  ClutterInputDevice *pointer = clutter_seat_get_pointer (seat);
+  ClutterEvent *event = clutter_event_new (type);
+  ClutterEventSequence *sequence = GINT_TO_POINTER (touch_sequence);
+
+  *was_presented = FALSE;
+
+  clutter_event_set_coords (event, x, y);
+  clutter_event_set_device (event, pointer);
+  clutter_event_set_source_device (event, pointer);
+  clutter_event_set_stage (event, stage);
+  event->touch.sequence = sequence;
+
+  clutter_event_put (event);
+  clutter_event_free (event);
+
+  clutter_actor_queue_redraw (CLUTTER_ACTOR (stage));
+
+  while (!*was_presented)
+    g_main_context_iteration (NULL, FALSE);
+}
+#endif
+
 static void
 gesture_relationship_simple (void)
 {
@@ -179,6 +212,115 @@ gesture_relationship_global_recognize_independently_2 (void)
   g_object_unref (gesture_1);
   g_object_unref (gesture_2);
 }
+
+static void
+gesture_relationship_change (void)
+{
+  ClutterActor *stage = clutter_test_get_stage ();
+  ClutterGesture *gesture_1 = CLUTTER_GESTURE (g_object_new (CLUTTER_TYPE_GESTURE, "name", "gesture-1", NULL));
+  ClutterGesture *gesture_2 = CLUTTER_GESTURE (g_object_new (CLUTTER_TYPE_GESTURE, "name", "gesture-2", NULL));
+  gboolean was_presented;
+
+  clutter_actor_add_action (stage, CLUTTER_ACTION (gesture_1));
+  clutter_actor_add_action (stage, CLUTTER_ACTION (gesture_2));
+
+  g_signal_connect (stage, "presented", G_CALLBACK (on_presented),
+                    &was_presented);
+
+  clutter_actor_show (stage);
+
+  emit_event_and_wait (CLUTTER_STAGE (stage), &was_presented, CLUTTER_BUTTON_PRESS, 15, 15);
+  g_assert_true (clutter_gesture_get_state (gesture_1) == CLUTTER_GESTURE_STATE_POSSIBLE);
+  g_assert_true (clutter_gesture_get_state (gesture_2) == CLUTTER_GESTURE_STATE_POSSIBLE);
+
+  clutter_gesture_can_not_cancel (gesture_1, gesture_2);
+  clutter_gesture_relationships_changed (gesture_2);
+
+  clutter_gesture_set_state (gesture_1, CLUTTER_GESTURE_STATE_RECOGNIZING);
+  g_assert_true (clutter_gesture_get_state (gesture_1) == CLUTTER_GESTURE_STATE_RECOGNIZING);
+  g_assert_true (clutter_gesture_get_state (gesture_2) == CLUTTER_GESTURE_STATE_POSSIBLE);
+
+  clutter_gesture_set_state (gesture_2, CLUTTER_GESTURE_STATE_RECOGNIZING);
+  g_assert_true (clutter_gesture_get_state (gesture_2) == CLUTTER_GESTURE_STATE_RECOGNIZING);
+  g_assert_true (clutter_gesture_get_state (gesture_1) == CLUTTER_GESTURE_STATE_CANCELLED);
+
+  clutter_gesture_set_state (gesture_2, CLUTTER_GESTURE_STATE_COMPLETED);
+  g_assert_true (clutter_gesture_get_state (gesture_2) == CLUTTER_GESTURE_STATE_COMPLETED);
+
+  emit_event_and_wait (CLUTTER_STAGE (stage), &was_presented, CLUTTER_BUTTON_RELEASE, 15, 15);
+  g_assert_true (clutter_gesture_get_state (gesture_1) == CLUTTER_GESTURE_STATE_WAITING);
+  g_assert_true (clutter_gesture_get_state (gesture_2) == CLUTTER_GESTURE_STATE_WAITING);
+
+  clutter_actor_remove_action (stage, CLUTTER_ACTION (gesture_1));
+  clutter_actor_remove_action (stage, CLUTTER_ACTION (gesture_2));
+  g_signal_handlers_disconnect_by_func (stage, on_presented, &was_presented);
+}
+
+#if 0
+static void
+gesture_relationship_change_2 (void)
+{
+  ClutterActor *stage = clutter_test_get_stage ();
+  ClutterActor *second_actor = clutter_actor_new ();
+
+  clutter_actor_set_size (second_actor, 20, 20);
+  clutter_actor_set_x (second_actor, 15);
+  clutter_actor_set_reactive (second_actor, true);
+  clutter_actor_add_child (stage, second_actor);
+
+  ClutterGesture *gesture_1 = CLUTTER_GESTURE (g_object_new (CLUTTER_TYPE_GESTURE, "name", "gesture-1", NULL));
+  ClutterGesture *gesture_2 = CLUTTER_GESTURE (g_object_new (CLUTTER_TYPE_GESTURE, "name", "gesture-2", NULL));
+  gboolean was_presented;
+  unsigned int n_points;
+
+  clutter_actor_add_action (stage, CLUTTER_ACTION (gesture_1));
+  clutter_actor_add_action (second_actor, CLUTTER_ACTION (gesture_2));
+  g_assert_true (clutter_gesture_get_state (gesture_1) == CLUTTER_GESTURE_STATE_WAITING);
+  g_assert_true (clutter_gesture_get_state (gesture_2) == CLUTTER_GESTURE_STATE_WAITING);
+
+  g_signal_connect (stage, "presented", G_CALLBACK (on_presented),
+                    &was_presented);
+
+  clutter_actor_show (stage);
+
+  emit_touch_event_and_wait (CLUTTER_STAGE (stage), &was_presented, CLUTTER_TOUCH_BEGIN, 1, 10, 10);
+
+  clutter_gesture_get_points (gesture_1, &n_points);
+  g_assert_cmpint (n_points, ==, 1);
+
+  g_assert_true (clutter_gesture_get_state (gesture_1) == CLUTTER_GESTURE_STATE_POSSIBLE);
+  g_assert_true (clutter_gesture_get_state (gesture_2) == CLUTTER_GESTURE_STATE_WAITING);
+
+  emit_touch_event_and_wait (CLUTTER_STAGE (stage), &was_presented, CLUTTER_TOUCH_BEGIN, 2, 17, 10);
+
+  g_assert_true (clutter_gesture_get_state (gesture_1) == CLUTTER_GESTURE_STATE_POSSIBLE);
+  g_assert_true (clutter_gesture_get_state (gesture_2) == CLUTTER_GESTURE_STATE_POSSIBLE);
+
+  clutter_gesture_get_points (gesture_1, &n_points);
+  g_assert_cmpint (n_points, ==, 2);
+  clutter_gesture_get_points (gesture_2, &n_points);
+  g_assert_cmpint (n_points, ==, 1);
+
+  clutter_gesture_set_state (gesture_1, CLUTTER_GESTURE_STATE_CANCELLED);
+  clutter_gesture_set_state (gesture_2, CLUTTER_GESTURE_STATE_CANCELLED);
+  g_assert_true (clutter_gesture_get_state (gesture_1) == CLUTTER_GESTURE_STATE_CANCELLED);
+  g_assert_true (clutter_gesture_get_state (gesture_2) == CLUTTER_GESTURE_STATE_CANCELLED);
+
+  emit_touch_event_and_wait (CLUTTER_STAGE (stage), &was_presented, CLUTTER_TOUCH_END, 2, 17, 10);
+
+  g_assert_true (clutter_gesture_get_state (gesture_1) == CLUTTER_GESTURE_STATE_CANCELLED);
+  g_assert_true (clutter_gesture_get_state (gesture_2) == CLUTTER_GESTURE_STATE_WAITING);
+
+  emit_touch_event_and_wait (CLUTTER_STAGE (stage), &was_presented, CLUTTER_TOUCH_END, 1, 0, 0);
+
+  g_assert_true (clutter_gesture_get_state (gesture_1) == CLUTTER_GESTURE_STATE_WAITING);
+
+  clutter_actor_destroy (second_actor);
+
+  clutter_actor_remove_action (stage, CLUTTER_ACTION (gesture_1));
+  g_signal_handlers_disconnect_by_func (stage, on_presented, &was_presented);
+}
+#endif
 
 static void
 gesture_relationship_failure_requirement_1 (void)
@@ -607,4 +749,8 @@ CLUTTER_TEST_SUITE (
   CLUTTER_TEST_UNIT ("/gesture/relationship/influencing-cascade-2", gesture_relationship_influencing_cascade_2);
   CLUTTER_TEST_UNIT ("/gesture/relationship/influencing-execution-order", gesture_relationship_influencing_execution_order);
   CLUTTER_TEST_UNIT ("/gesture/relationship/influencing-event-order", gesture_relationship_event_order);
+  CLUTTER_TEST_UNIT ("/gesture/relationship/change", gesture_relationship_change);
+#if 0
+  CLUTTER_TEST_UNIT ("/gesture/relationship-change-2", gesture_relationship_change_2);
+#endif
 )
