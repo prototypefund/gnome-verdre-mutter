@@ -39,6 +39,7 @@ clutter_conform_tests_general_tests = [
   'frame-clock-timeline',
   'grab',
   'gesture',
+  'gesture-relationship',
   'interval',
   'script-parser',
   'timeline',
