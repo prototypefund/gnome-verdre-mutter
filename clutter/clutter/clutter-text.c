@@ -2297,7 +2297,7 @@ clutter_text_press (ClutterActor *actor,
   priv->in_select_drag = TRUE;
 
   stage = clutter_actor_get_stage (actor);
-  priv->grab = clutter_stage_grab (CLUTTER_STAGE (stage), actor);
+ // priv->grab = clutter_stage_grab (CLUTTER_STAGE (stage), actor);
 
   if (type != CLUTTER_BUTTON_PRESS)
     priv->in_select_touch = TRUE;
@@ -2347,12 +2347,12 @@ clutter_text_release (ClutterActor *actor,
 
   if (priv->in_select_drag)
     {
-      if (priv->grab)
+/*      if (priv->grab)
         {
           clutter_grab_dismiss (priv->grab);
           g_clear_pointer (&priv->grab, clutter_grab_unref);
         }
-
+*/
       if (type == CLUTTER_BUTTON_RELEASE)
         {
           if (!priv->in_select_touch)
