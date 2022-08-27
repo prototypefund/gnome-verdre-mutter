@@ -5591,9 +5591,11 @@ meta_window_recalc_features (MetaWindow *window)
       meta_window_get_work_area_current_monitor (window, &work_area);
       meta_window_frame_rect_to_client_rect (window, &work_area, &client_rect);
 
-      if (window->size_hints.min_width >= client_rect.width ||
-          window->size_hints.min_height >= client_rect.height)
+      if (window->size_hints.min_width > client_rect.width ||
+          window->size_hints.min_height > client_rect.height) {
+g_warning("WWINDOW %s size hints too large to maximize. min size %dx%d", window->desc, window->size_hints.min_width, window->size_hints.min_height);
         window->has_maximize_func = FALSE;
+}
     }
 
   meta_topic (META_DEBUG_WINDOW_OPS,
