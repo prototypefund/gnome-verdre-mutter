@@ -575,7 +575,7 @@ text_input_commit_state (struct wl_client   *client,
 {
   MetaWaylandTextInput *text_input = wl_resource_get_user_data (resource);
   ClutterInputFocus *focus = text_input->input_focus;
-  gboolean enable_panel = FALSE;
+  gboolean toggle_panel = FALSE;
 
   increment_serial (text_input, resource);
 
@@ -597,12 +597,9 @@ text_input_commit_state (struct wl_client   *client,
               else
                 return;
             }
-          else
-            {
-              enable_panel = TRUE;
-            }
 
           clutter_input_focus_set_can_show_preedit (focus, TRUE);
+          toggle_panel = TRUE;
         }
       else if (clutter_input_focus_is_focused (focus))
         {
@@ -655,8 +652,8 @@ text_input_commit_state (struct wl_client   *client,
 
   meta_wayland_text_input_reset (text_input);
 
-  if (enable_panel)
-    clutter_input_focus_set_input_panel_state (focus, CLUTTER_INPUT_PANEL_STATE_ON);
+  if (toggle_panel)
+    clutter_input_focus_set_input_panel_state (focus, CLUTTER_INPUT_PANEL_STATE_TOGGLE);
 
   meta_wayland_text_input_focus_defer_done (focus);
 }
