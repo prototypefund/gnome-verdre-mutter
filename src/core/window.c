@@ -220,6 +220,7 @@ enum
   POSITION_CHANGED,
   SHOWN,
   TRANSIENT_FOR_CHANGED,
+  CAN_MAXIMIZE_CHANGED,
 
   LAST_SIGNAL
 };
@@ -754,6 +755,20 @@ meta_window_class_init (MetaWindowClass *klass)
    */
   window_signals[TRANSIENT_FOR_CHANGED] =
     g_signal_new ("transient-for-changed",
+                  G_TYPE_FROM_CLASS (object_class),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 0);
+
+  /**
+   * MetaWindow::can-maximize-changed:
+   * @window: a #MetaWindow
+   *
+   * Emitted when can-maximize of the window has changed.
+   */
+  window_signals[CAN_MAXIMIZE_CHANGED] =
+    g_signal_new ("can-maximize-changed",
                   G_TYPE_FROM_CLASS (object_class),
                   G_SIGNAL_RUN_LAST,
                   0,
@@ -5467,6 +5482,7 @@ meta_window_recalc_features (MetaWindow *window)
 {
   gboolean old_has_close_func;
   gboolean old_has_minimize_func;
+  gboolean old_has_maximize_func;
   gboolean old_has_move_func;
   gboolean old_has_resize_func;
   gboolean old_has_shade_func;
@@ -5475,6 +5491,7 @@ meta_window_recalc_features (MetaWindow *window)
 
   old_has_close_func = window->has_close_func;
   old_has_minimize_func = window->has_minimize_func;
+  old_has_maximize_func = window->has_maximize_func;
   old_has_move_func = window->has_move_func;
   old_has_resize_func = window->has_resize_func;
   old_has_shade_func = window->has_shade_func;
@@ -5658,6 +5675,9 @@ meta_window_recalc_features (MetaWindow *window)
     g_object_notify_by_pspec (G_OBJECT (window), obj_props[PROP_RESIZEABLE]);
 
   meta_window_frame_size_changed (window);
+
+  if (window->has_maximize_func != old_has_maximize_func)
+    g_signal_emit (window, window_signals[CAN_MAXIMIZE_CHANGED], 0);
 
   /* FIXME perhaps should ensure if we don't have a shade func,
    * we aren't shaded, etc.
