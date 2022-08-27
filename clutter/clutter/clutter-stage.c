@@ -918,7 +918,7 @@ clutter_stage_finish_layout (ClutterStage *stage)
 
       if (!priv->actor_needs_immediate_relayout)
         break;
-
+g_warning("ACTOR: maybe relayout because needs");
       priv->actor_needs_immediate_relayout = FALSE;
       clutter_stage_maybe_relayout (actor);
       clutter_stage_maybe_finish_queue_redraws (stage);

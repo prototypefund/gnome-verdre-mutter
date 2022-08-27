@@ -1573,6 +1573,13 @@ clutter_actor_real_map (ClutterActor *self)
       clutter_actor_queue_relayout (self);
     }
 
+  COGL_TRACE_SCOPED_ANCHOR (ClutterActorMap);
+
+      COGL_TRACE_BEGIN_ANCHORED (ClutterActorMap,
+                                 "map actor");
+      COGL_TRACE_DESCRIBE (ClutterActorMap,
+                           _clutter_actor_get_debug_name (self));
+
   /* notify on parent mapped before potentially mapping
    * children, so apps see a top-down notification.
    */
@@ -2970,7 +2977,7 @@ clutter_actor_get_abs_allocation_vertices (ClutterActor       *self,
       if (!stage)
         return;
 
-      clutter_stage_maybe_relayout (stage);
+  //    clutter_stage_maybe_relayout (stage);
     }
 
   /* NB: _clutter_actor_transform_and_project_box expects a box in the actor's
@@ -8879,8 +8886,8 @@ clutter_actor_get_allocation_box (ClutterActor    *self,
       ClutterActor *stage = _clutter_actor_get_stage_internal (self);
 
       /* do not queue a relayout on an unparented actor */
-      if (stage)
-        clutter_stage_maybe_relayout (stage);
+  //    if (stage)
+//        clutter_stage_maybe_relayout (stage);
     }
 
   /* commenting out the code above and just keeping this assignment
