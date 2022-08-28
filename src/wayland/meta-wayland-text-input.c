@@ -653,7 +653,7 @@ text_input_commit_state (struct wl_client   *client,
   meta_wayland_text_input_reset (text_input);
 
   if (toggle_panel)
-    clutter_input_focus_set_input_panel_state (focus, CLUTTER_INPUT_PANEL_STATE_TOGGLE);
+    clutter_input_focus_set_input_panel_state (focus, CLUTTER_INPUT_PANEL_STATE_ON);
 
   meta_wayland_text_input_focus_defer_done (focus);
 }
