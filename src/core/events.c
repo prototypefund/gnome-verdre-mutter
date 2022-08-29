@@ -88,6 +88,7 @@ get_window_for_event (MetaDisplay        *display,
   switch (display->event_route)
     {
     case META_EVENT_ROUTE_NORMAL:
+    case META_EVENT_ROUTE_WAYLAND_POPUP:
       {
         MetaWindowActor *window_actor;
 
@@ -108,7 +109,7 @@ get_window_for_event (MetaDisplay        *display,
           return NULL;
       }
     case META_EVENT_ROUTE_WINDOW_OP:
-    case META_EVENT_ROUTE_WAYLAND_POPUP:
+  //  case META_EVENT_ROUTE_WAYLAND_POPUP:
     case META_EVENT_ROUTE_FRAME_BUTTON:
       return display->grab_window;
     default:
@@ -531,8 +532,8 @@ meta_display_handle_event (MetaDisplay        *display,
 
  out:
   /* If a Wayland client has a grab, don't pass that through to Clutter */
-  if (display->event_route == META_EVENT_ROUTE_WAYLAND_POPUP)
-    bypass_clutter = !bypass_wayland;
+ // if (display->event_route == META_EVENT_ROUTE_WAYLAND_POPUP)
+ //   bypass_clutter = !bypass_wayland;
 
 #ifdef HAVE_WAYLAND
   if (wayland_compositor && !bypass_wayland)
