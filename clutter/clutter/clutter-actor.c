@@ -1561,8 +1561,8 @@ clutter_actor_real_map (ClutterActor *self)
       if (priv->needs_update_stage_views)
         {
           /* Avoid the early return in queue_update_stage_views() */
-          priv->needs_update_stage_views = FALSE;
-          queue_update_stage_views (self);
+       //   priv->needs_update_stage_views = FALSE;
+       //   queue_update_stage_views (self);
         }
 
       /* Avoid the early return in clutter_actor_queue_relayout() */
@@ -2520,7 +2520,7 @@ absolute_geometry_changed (ClutterActor *actor)
   actor->priv->absolute_modelview_projection_valid = FALSE;
   actor->priv->absolute_modelview_valid = FALSE;
 actor->priv->reuse_last_pv = FALSE;
-  queue_update_stage_views (actor);
+ // queue_update_stage_views (actor);
 }
 
 static ClutterActorTraverseVisitFlags
@@ -15654,6 +15654,16 @@ update_stage_views (ClutterActor *self)
 
   stage = CLUTTER_STAGE (_clutter_actor_get_stage_internal (self));
   g_return_if_fail (stage);
+
+  GList *views = clutter_stage_peek_stage_views (stage);
+
+  /* If there's only one stage view, no need to all the fancy magic */
+  if (old_stage_views && old_stage_views->next == NULL && views->next == NULL)
+    {
+      old_stage_views->data = views->data;
+      priv->stage_views = g_steal_pointer (&old_stage_views);
+      return;
+    }
 
   clutter_actor_get_transformed_extents (self, &bounding_rect);
 
