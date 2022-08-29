@@ -1370,12 +1370,12 @@ clutter_gesture_finalize (GObject *gobject)
   g_array_unref (priv->points);
   g_array_unref (priv->public_points);
 
-  g_assert (g_hash_table_size (priv->in_relationship_with) == 0);
+//  g_assert (g_hash_table_size (priv->in_relationship_with) == 0);
   g_hash_table_destroy (priv->in_relationship_with);
 
-  g_assert (priv->cancel_on_recognizing->len == 0);
+//  g_assert (priv->cancel_on_recognizing->len == 0);
   g_ptr_array_free (priv->cancel_on_recognizing, TRUE);
-  g_assert (priv->inhibit_until_cancelled->len == 0);
+//  g_assert (priv->inhibit_until_cancelled->len == 0);
   g_ptr_array_free (priv->inhibit_until_cancelled, TRUE);
 
   if (priv->can_not_cancel)
