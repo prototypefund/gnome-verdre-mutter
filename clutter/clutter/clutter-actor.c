@@ -1562,7 +1562,7 @@ clutter_actor_real_map (ClutterActor *self)
         {
           /* Avoid the early return in queue_update_stage_views() */
           priv->needs_update_stage_views = FALSE;
-       //   queue_update_stage_views (self);
+          queue_update_stage_views (self);
         }
 
       /* Avoid the early return in clutter_actor_queue_relayout() */
@@ -2520,7 +2520,7 @@ absolute_geometry_changed (ClutterActor *actor)
   actor->priv->absolute_modelview_projection_valid = FALSE;
   actor->priv->absolute_modelview_valid = FALSE;
 actor->priv->reuse_last_pv = FALSE;
- // queue_update_stage_views (actor);
+  queue_update_stage_views (actor);
 }
 
 static ClutterActorTraverseVisitFlags
