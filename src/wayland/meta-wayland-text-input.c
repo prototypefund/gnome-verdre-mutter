@@ -367,7 +367,7 @@ meta_wayland_text_input_set_focus (MetaWaylandTextInput *text_input,
                           &text_input->focus_resource_list);
         }
 
-      wl_list_remove (&text_input->surface_listener.link);
+     // wl_list_remove (&text_input->surface_listener.link);
       text_input->surface = NULL;
     }
 
