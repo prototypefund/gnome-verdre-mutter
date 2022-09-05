@@ -35,7 +35,10 @@
 #define SCALE_FACTORS_STEPS (1.0 / (float) SCALE_FACTORS_PER_INTEGER)
 #define MINIMUM_SCALE_FACTOR 1.0f
 #define MAXIMUM_SCALE_FACTOR 4.0f
-#define MINIMUM_LOGICAL_AREA (800 * 480)
+/* FIXME: hardcoded mobile specific stuff */
+#define MINIMUM_WIDTH 360
+#define MINIMUM_HEIGHT 540
+#define MINIMUM_LOGICAL_AREA (MINIMUM_HEIGHT * MINIMUM_WIDTH)
 #define MAXIMUM_REFRESH_RATE_DIFF 0.001
 
 typedef struct _MetaMonitorMode
@@ -1817,6 +1820,11 @@ meta_monitor_calculate_crtc_pos (MetaMonitor          *monitor,
 /* From http://en.wikipedia.org/wiki/4K_resolution#Resolutions_of_common_formats */
 #define SMALLEST_4K_WIDTH 3656
 
+/* The max DPI we aim for, this is used as a base to calculate the scale factor
+ * See https://gitlab.gnome.org/World/Phosh/phoc/-/commit/9db86680439653424a4440cdff5dcfd6dc654e72
+ */
+#define MAX_DPI_TARGET 180
+
 static float
 calculate_scale (MetaMonitor                *monitor,
                  MetaMonitorMode            *monitor_mode,
@@ -1856,19 +1864,43 @@ calculate_scale (MetaMonitor                *monitor,
   if (meta_monitor_has_aspect_as_size (monitor))
     return scale;
 
+  /* Ported from Phoc
+   * https://gitlab.gnome.org/World/Phosh/phoc/-/commit/9db86680439653424a4440cdff5dcfd6dc654e72
+   */
   if (width_mm > 0 && height_mm > 0)
     {
-      double dpi_x, dpi_y;
+      float dpi, long_side, short_side, max_scale;
 
-      dpi_x = (double) resolution_width / (width_mm / 25.4);
-      dpi_y = (double) resolution_height / (height_mm / 25.4);
+      if (resolution_width > resolution_height) {
+        long_side = resolution_width;
+        short_side = resolution_height;
+      } else {
+        long_side = resolution_height;
+        short_side = resolution_width;
+      }
+
+      /* Ensure scaled resolution won't be inferior to minimum values */
+      max_scale = fminf (long_side / MINIMUM_HEIGHT, short_side / MINIMUM_WIDTH);
 
       /*
-       * We don't completely trust these values so both must be high, and never
-       * pick higher ratio than 2 automatically.
-       */
-      if (dpi_x > HIDPI_LIMIT && dpi_y > HIDPI_LIMIT)
-        scale = 2.0;
+        * Round the maximum scale to a sensible value:
+        *   - never use a scaling factor < 1
+        *   - round to the lower 0.25 step below 2
+        *   - round to the lower 0.5 step between 2 and 3
+        *   - round to the lower integer value over 3
+        */
+      if (max_scale < 1) {
+        max_scale = 1;
+      } else if (max_scale < 2) {
+        max_scale = 0.25 * floorf (max_scale / 0.25);
+      } else if (max_scale < 3) {
+        max_scale = 0.5 * floorf (max_scale / 0.5);
+      } else {
+        max_scale = floorf (max_scale);
+      }
+
+      dpi = (float) resolution_height / (float) height_mm * 25.4;
+      scale = fminf (ceilf (dpi / MAX_DPI_TARGET), max_scale);
     }
 
   return scale;
@@ -1993,11 +2025,14 @@ meta_monitor_calculate_supported_scales (MetaMonitor                 *monitor,
 {
   unsigned int i, j;
   int width, height;
+  float mode_scale;
   GArray *supported_scales;
 
   supported_scales = g_array_new (FALSE, FALSE, sizeof (float));
 
   meta_monitor_mode_get_resolution (monitor_mode, &width, &height);
+
+  mode_scale = calculate_scale(monitor, monitor_mode, constraints);
 
   for (i = floorf (MINIMUM_SCALE_FACTOR);
        i <= ceilf (MAXIMUM_SCALE_FACTOR);
@@ -2042,6 +2077,16 @@ meta_monitor_calculate_supported_scales (MetaMonitor                 *monitor,
       fallback_scale = 1.0;
       g_array_append_val (supported_scales, fallback_scale);
     }
+
+  if (g_array_index(supported_scales, float, supported_scales->len-1) <= mode_scale)
+    {
+      g_array_append_val (supported_scales, mode_scale);
+    }
+  
+  g_warning("CA:: supported scale factors:");
+  for(i = 0; i < supported_scales->len; i++) {
+    g_warning("CA::\t %f", g_array_index(supported_scales, float, i));
+  }
 
   *n_supported_scales = supported_scales->len;
   return (float *) g_array_free (supported_scales, FALSE);
