@@ -169,6 +169,7 @@ void clutter_stage_maybe_lost_sequence_grab (ClutterStage         *self,
                                              ClutterInputDevice   *device,
                                              ClutterEventSequence *sequence);
 
+CLUTTER_EXPORT_TEST
 void clutter_stage_sequence_handled_by_action (ClutterStage         *self,
                                                ClutterInputDevice   *device,
                                                ClutterEventSequence *sequence);
