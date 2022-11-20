@@ -184,6 +184,10 @@ const ClutterGesturePoint * clutter_gesture_get_points (ClutterGesture *self,
                                                         unsigned int   *n_points);
 
 CLUTTER_EXPORT
+void clutter_gesture_set_wait_points_removed (ClutterGesture *self,
+                                         gboolean        wait_points_removed);
+
+CLUTTER_EXPORT
 void clutter_gesture_set_allowed_device_types (ClutterGesture         *self,
                                                ClutterInputDeviceType *allowed_device_types,
                                                size_t                  n_device_types);
