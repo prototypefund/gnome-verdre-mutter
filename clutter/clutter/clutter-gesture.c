@@ -137,6 +137,8 @@ struct _ClutterGesturePrivate
 
   ClutterGestureState state;
 
+  gboolean wait_points_removed;
+
   uint64_t allowed_device_types;
 
   GHashTable *in_relationship_with;
@@ -651,9 +653,11 @@ maybe_move_to_waiting (ClutterGesture *self)
 {
   ClutterGesturePrivate *priv = clutter_gesture_get_instance_private (self);
 
-  if (priv->points->len == 0 &&
-      (priv->state == CLUTTER_GESTURE_STATE_COMPLETED ||
-       priv->state == CLUTTER_GESTURE_STATE_CANCELLED))
+  if (priv->state != CLUTTER_GESTURE_STATE_COMPLETED &&
+      priv->state != CLUTTER_GESTURE_STATE_CANCELLED)
+    return;
+
+  if (!priv->wait_points_removed || priv->points->len == 0)
     set_state (self, CLUTTER_GESTURE_STATE_WAITING);
 }
 
@@ -1266,6 +1270,8 @@ clutter_gesture_init (ClutterGesture *self)
 
   priv->state = CLUTTER_GESTURE_STATE_WAITING;
 
+  priv->wait_points_removed = TRUE;
+
   priv->allowed_device_types =
     DEVICE_TYPE_TO_BIT (CLUTTER_POINTER_DEVICE) |
     DEVICE_TYPE_TO_BIT (CLUTTER_TOUCHPAD_DEVICE) |
@@ -1494,4 +1500,29 @@ clutter_gesture_recognize_independently_from (ClutterGesture *self,
   g_object_weak_ref (G_OBJECT (other_gesture),
                      (GWeakNotify) other_gesture_disposed,
                      priv->recognize_independently_from);
+}
+
+/**
+ * clutter_gesture_set_wait_points_removed:
+ * @self: a #ClutterGesture
+ * @wait_points_removed: whether to waiit
+ *
+ * In case @self and @other_gesture are operating on a different set of points,
+ * calling this function will allow @self to start while @other_gesture is
+ * already in state RECOGNIZING.
+ */
+void
+clutter_gesture_set_wait_points_removed (ClutterGesture *self,
+                                         gboolean        wait_points_removed)
+{
+  ClutterGesturePrivate *priv;
+
+  g_return_if_fail (CLUTTER_IS_GESTURE (self));
+
+  priv = clutter_gesture_get_instance_private (self);
+
+  if (priv->wait_points_removed == wait_points_removed)
+    return;
+
+  priv->wait_points_removed = wait_points_removed;
 }
