@@ -116,9 +116,9 @@ test_action_handle_event (ClutterAction      *action,
 
       if (action_claim_sequence)
         {
-          clutter_stage_set_sequence_claimed_by_gesture (clutter_event_get_stage (event),
-                                                         clutter_event_get_device (event),
-                                                         clutter_event_get_event_sequence (event));
+          clutter_stage_sequence_handled_by_action (clutter_event_get_stage (event),
+                                                    clutter_event_get_device (event),
+                                                    clutter_event_get_event_sequence (event));
         }
     }
 
