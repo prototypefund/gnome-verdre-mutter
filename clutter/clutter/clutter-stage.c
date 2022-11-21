@@ -4676,6 +4676,8 @@ clutter_stage_emit_event (ClutterStage       *self,
 
       state = emit_event (event, entry->event_emission_chain);
 
+      g_assert (state != EVENT_HANDLED_BY_ACTION);
+
       if (state == EVENT_HANDLED_BY_ACTOR)
         remove_all_actions_from_chain (entry);
     }
