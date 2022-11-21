@@ -892,6 +892,8 @@ clutter_stage_finish_layout (ClutterStage *stage)
       clutter_stage_maybe_relayout (actor);
     }
 
+priv->pending_finish_queue_redraws = FALSE;
+
   g_warn_if_fail (!priv->actor_needs_immediate_relayout);
 }
 
