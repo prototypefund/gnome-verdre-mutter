@@ -113,6 +113,7 @@ typedef struct _PointerDeviceEntry
   unsigned int press_count;
   ClutterActor *sequence_grab_actor;
   GArray *event_emission_chain;
+  gboolean action_controls_crossings;
 } PointerDeviceEntry;
 
 struct _ClutterStagePrivate
@@ -3270,6 +3271,7 @@ clutter_stage_update_device_entry (ClutterStage         *self,
         g_array_sized_new (FALSE, TRUE, sizeof (EventReceiver), 32);
       g_array_set_clear_func (entry->event_emission_chain,
                               (GDestroyNotify) free_event_receiver);
+      entry->action_controls_crossings = FALSE;
     }
 
   entry->coords = coords;
@@ -3601,22 +3603,36 @@ static void
 sync_crossings_on_sequence_grab_end (ClutterStage       *self,
                                      PointerDeviceEntry *entry)
 {
+  ClutterStagePrivate *priv = self->priv;
   ClutterActor *deepmost, *topmost;
-  ClutterActor *parent;
   ClutterEvent *crossing;
 
   deepmost = entry->current_actor;
 
-  if (clutter_actor_contains (entry->current_actor, entry->sequence_grab_actor))
-    return;
-
-  topmost = entry->current_actor;
-  while ((parent = clutter_actor_get_parent (topmost)))
+  /* If the sequence grab was handled by an action, we need to send ENTER
+   * events up to the stage (see comment in
+   * sync_crossings_on_sequence_handled_by_action()). If it wasn't, send them
+   * up to the first common ancestor (not including that ancestor).
+   */
+  if (entry->action_controls_crossings)
     {
-      if (clutter_actor_contains (parent, entry->sequence_grab_actor))
-        break;
+      topmost = priv->topmost_grab ? priv->topmost_grab->actor : CLUTTER_ACTOR (self);
+    }
+  else
+    {
+      ClutterActor *parent;
 
-      topmost = parent;
+      if (clutter_actor_contains (entry->current_actor, entry->sequence_grab_actor))
+        return;
+
+      topmost = entry->current_actor;
+      while ((parent = clutter_actor_get_parent (topmost)))
+        {
+          if (clutter_actor_contains (parent, entry->sequence_grab_actor))
+            break;
+
+          topmost = parent;
+        }
     }
 
   crossing = create_crossing_event (self,
@@ -4607,6 +4623,8 @@ clutter_stage_emit_event (ClutterStage       *self,
       g_signal_connect (entry->sequence_grab_actor, "destroy",
                         G_CALLBACK (sequence_grab_actor_destroyed), entry);
 
+      entry->action_controls_crossings = FALSE;
+
       create_event_emission_chain (self, entry->event_emission_chain, seat_grab_actor, target_actor);
     }
 
@@ -4638,6 +4656,46 @@ clutter_stage_emit_event (ClutterStage       *self,
     }
 }
 
+static void
+sync_crossings_on_sequence_handled_by_action (ClutterStage       *self,
+                                              PointerDeviceEntry *entry)
+{
+  ClutterStagePrivate *priv = self->priv;
+  ClutterEvent *crossing;
+  ClutterActor *deepmost, *topmost;
+
+  crossing = create_crossing_event (self,
+                                    entry->device,
+                                    entry->sequence,
+                                    CLUTTER_LEAVE,
+                                    CLUTTER_EVENT_FLAG_GRAB_NOTIFY,
+                                    NULL,
+                                    NULL,
+                                    entry->coords,
+                                    CLUTTER_CURRENT_TIME);
+
+  /* If an action claims a sequence, we'll send LEAVE events to the whole
+   * implicit grab, including the actor of the action itself.
+   * We can't possibly know how an action wants hover states to behave while
+   * active, let alone what should happen when multiple actions claimed a
+   * sequence together.
+   * By sending LEAVE events to the whole sequence grab, we hand responsibility
+   * over to actions themselves.
+   */
+  deepmost = entry->sequence_grab_actor;
+  topmost = priv->topmost_grab ? priv->topmost_grab->actor : CLUTTER_ACTOR (self);
+
+  if (!_clutter_event_process_filters (crossing, deepmost))
+    {
+      clutter_stage_emit_crossing_event (self,
+                                         crossing,
+                                         deepmost,
+                                         topmost);
+    }
+
+  clutter_event_free (crossing);
+}
+
 void
 clutter_stage_sequence_handled_by_action (ClutterStage         *self,
                                           ClutterInputDevice   *device,
@@ -4653,5 +4711,11 @@ clutter_stage_sequence_handled_by_action (ClutterStage         *self,
 
   g_assert (entry->press_count > 0);
 
+  if (entry->action_controls_crossings)
+    return;
+
   remove_all_actors_from_chain (entry);
+  sync_crossings_on_sequence_handled_by_action (self, entry);
+
+  entry->action_controls_crossings = TRUE;
 }
