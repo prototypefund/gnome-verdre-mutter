@@ -72,7 +72,12 @@ gesture_disposed_while_active (void)
   g_assert_true (clutter_gesture_get_state (gesture_1) == CLUTTER_GESTURE_STATE_COMPLETED);
 
   clutter_actor_destroy (second_actor);
-  g_assert_null (gesture_1);
+
+  /* Actions continue receiving sequence events even after their actor got
+   * destroyed.
+   */
+  g_assert_nonnull (gesture_1);
+  g_assert_true (clutter_gesture_get_state (gesture_1) == CLUTTER_GESTURE_STATE_COMPLETED);
 
   emit_event_and_wait (CLUTTER_STAGE (stage), &was_presented, CLUTTER_BUTTON_RELEASE, 15, 15);
   g_assert_null (gesture_1);
