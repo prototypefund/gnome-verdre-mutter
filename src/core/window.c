@@ -2602,11 +2602,13 @@ meta_window_maximize_internal (MetaWindow        *window,
   maximize_vertically   = directions & META_MAXIMIZE_VERTICAL;
   g_assert (maximize_horizontally || maximize_vertically);
 
-  if (!window->has_maximize_func)
+  if (!window->has_maximize_func) {
+  g_warning ("WindowManager mutter try to max but has no func");
     return FALSE;
+}
 
-  meta_topic (META_DEBUG_WINDOW_OPS,
-              "Maximizing %s%s",
+  g_warning (
+              "WindowManager mutter Maximizing %s%s",
               window->desc,
               maximize_horizontally && maximize_vertically ? "" :
                 maximize_horizontally ? " horizontally" :
@@ -2677,6 +2679,7 @@ meta_window_maximize (MetaWindow        *window,
        */
       if (!window->placed)
 	{
+  g_warning ("WindowManager mutter try to max but not yet placed, doing later");
 	  window->maximize_horizontally_after_placement =
             window->maximize_horizontally_after_placement ||
             maximize_horizontally;
@@ -5627,8 +5630,8 @@ meta_window_recalc_features (MetaWindow *window)
         window->has_maximize_func = FALSE;
     }
 
-  meta_topic (META_DEBUG_WINDOW_OPS,
-              "Window %s fullscreen = %d not resizable, maximizable = %d fullscreenable = %d min size %dx%d max size %dx%d",
+  g_warning (
+              "WindowManager mutter  %s fullscreen = %d not resizable, maximizable = %d fullscreenable = %d min size %dx%d max size %dx%d",
               window->desc,
               window->fullscreen,
               window->has_maximize_func, window->has_fullscreen_func,

@@ -593,6 +593,8 @@ place_window_if_needed(MetaWindow     *window,
           (window->maximize_horizontally_after_placement ||
            window->maximize_vertically_after_placement))
         {
+  g_warning ("WindowManager mutter maximizing after placement");
+
           /* define a sane saved_rect so that the user can unmaximize to
            * something reasonable.
            */

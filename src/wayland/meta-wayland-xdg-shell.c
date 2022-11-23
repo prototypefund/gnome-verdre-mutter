@@ -433,6 +433,7 @@ xdg_toplevel_set_maximized (struct wl_client   *client,
     return;
 
   meta_window_force_placement (window, TRUE);
+g_warning("WindowManager mutter: forcing window to max xdg shell");
   meta_window_maximize (window, META_MAXIMIZE_BOTH);
 }
 
@@ -450,6 +451,7 @@ xdg_toplevel_unset_maximized (struct wl_client   *client,
   if (!window->can_grab)
     return;
 
+g_warning("WindowManager mutter: forcing window to unmax xdg shell");
   meta_window_unmaximize (window, META_MAXIMIZE_BOTH);
 }
 
