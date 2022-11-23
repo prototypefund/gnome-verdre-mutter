@@ -48,8 +48,6 @@ void meta_compositor_remove_window_actor (MetaCompositor  *compositor,
 
 void meta_compositor_window_actor_stage_views_changed (MetaCompositor *compositor);
 
-void meta_switch_workspace_completed (MetaCompositor *compositor);
-
 MetaPluginManager * meta_compositor_get_plugin_manager (MetaCompositor *compositor);
 
 int64_t meta_compositor_monotonic_to_high_res_xserver_time (MetaCompositor *compositor,
@@ -77,8 +75,6 @@ MetaBackend * meta_compositor_get_backend (MetaCompositor *compositor);
 MetaWindowActor * meta_compositor_get_top_window_actor (MetaCompositor *compositor);
 
 ClutterStage * meta_compositor_get_stage (MetaCompositor *compositor);
-
-gboolean meta_compositor_is_switching_workspace (MetaCompositor *compositor);
 
 void meta_compositor_grab_begin (MetaCompositor *compositor);
 void meta_compositor_grab_end (MetaCompositor *compositor);

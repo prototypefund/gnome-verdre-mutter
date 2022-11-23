@@ -427,6 +427,8 @@ struct _MetaWindow
   /* Whether the window is alive */
   guint is_alive : 1;
 
+  unsigned int can_grab : 1;
+
   /* if non-NULL, the bounds of the window frame */
   cairo_region_t *frame_bounds;
 
@@ -667,7 +669,7 @@ void        meta_window_restore_tile       (MetaWindow        *window,
                                             MetaTileMode       mode,
                                             int                width,
                                             int                height);
-void        meta_window_maximize_internal  (MetaWindow        *window,
+gboolean    meta_window_maximize_internal  (MetaWindow        *window,
                                             MetaMaximizeFlags  directions,
                                             MetaRectangle     *saved_rect);
 

@@ -87,9 +87,6 @@ _meta_plugin_xevent_filter (MetaPlugin *plugin,
 void
 meta_plugin_switch_workspace_completed (MetaPlugin *plugin)
 {
-  MetaPluginPrivate *priv = meta_plugin_get_instance_private (plugin);
-
-  meta_switch_workspace_completed (priv->compositor);
 }
 
 static void

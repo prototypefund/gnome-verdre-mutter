@@ -256,6 +256,9 @@ gtk_surface_titlebar_gesture (struct wl_client   *client,
       if (!window->has_maximize_func)
         break;
 
+      if (!window->can_grab)
+        return;
+
       if (META_WINDOW_MAXIMIZED (window))
         meta_window_unmaximize (window, META_MAXIMIZE_BOTH);
       else
@@ -266,6 +269,9 @@ gtk_surface_titlebar_gesture (struct wl_client   *client,
       if (!window->has_maximize_func)
         break;
 
+      if (!window->can_grab)
+        return;
+
       if (META_WINDOW_MAXIMIZED_HORIZONTALLY (window))
         meta_window_unmaximize (window, META_MAXIMIZE_HORIZONTAL);
       else
@@ -275,6 +281,9 @@ gtk_surface_titlebar_gesture (struct wl_client   *client,
     case G_DESKTOP_TITLEBAR_ACTION_TOGGLE_MAXIMIZE_VERTICALLY:
       if (!window->has_maximize_func)
         break;
+
+      if (!window->can_grab)
+        return;
 
       if (META_WINDOW_MAXIMIZED_VERTICALLY (window))
         meta_window_unmaximize (window, META_MAXIMIZE_VERTICAL);

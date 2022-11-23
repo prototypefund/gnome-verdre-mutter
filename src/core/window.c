@@ -219,6 +219,8 @@ enum
   SIZE_CHANGED,
   POSITION_CHANGED,
   SHOWN,
+  TRANSIENT_FOR_CHANGED,
+  CAN_MAXIMIZE_CHANGED,
 
   LAST_SIGNAL
 };
@@ -745,6 +747,33 @@ meta_window_class_init (MetaWindowClass *klass)
                   0,
                   NULL, NULL, NULL,
                   G_TYPE_NONE, 0);
+  /**
+   * MetaWindow::transient-for-changed:
+   * @window: a #MetaWindow
+   *
+   * Emitted when the transient-for window has changed.
+   */
+  window_signals[TRANSIENT_FOR_CHANGED] =
+    g_signal_new ("transient-for-changed",
+                  G_TYPE_FROM_CLASS (object_class),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 0);
+
+  /**
+   * MetaWindow::can-maximize-changed:
+   * @window: a #MetaWindow
+   *
+   * Emitted when can-maximize of the window has changed.
+   */
+  window_signals[CAN_MAXIMIZE_CHANGED] =
+    g_signal_new ("can-maximize-changed",
+                  G_TYPE_FROM_CLASS (object_class),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 0);
 }
 
 static void
@@ -1143,6 +1172,8 @@ meta_window_constructed (GObject *object)
   window->initial_timestamp = 0; /* not used */
 
   window->compositor_private = NULL;
+
+  window->can_grab = TRUE;
 
   if (window->rect.width > 0 && window->rect.height > 0)
     window->monitor = meta_window_find_monitor_from_frame_rect (window);
@@ -2560,7 +2591,7 @@ meta_window_save_rect (MetaWindow *window)
     }
 }
 
-void
+gboolean
 meta_window_maximize_internal (MetaWindow        *window,
                                MetaMaximizeFlags  directions,
                                MetaRectangle     *saved_rect)
@@ -2570,6 +2601,9 @@ meta_window_maximize_internal (MetaWindow        *window,
   maximize_horizontally = directions & META_MAXIMIZE_HORIZONTAL;
   maximize_vertically   = directions & META_MAXIMIZE_VERTICAL;
   g_assert (maximize_horizontally || maximize_vertically);
+
+  if (!window->has_maximize_func)
+    return FALSE;
 
   meta_topic (META_DEBUG_WINDOW_OPS,
               "Maximizing %s%s",
@@ -2604,6 +2638,8 @@ meta_window_maximize_internal (MetaWindow        *window,
   g_object_notify_by_pspec (G_OBJECT (window), obj_props[PROP_MAXIMIZED_HORIZONTALLY]);
   g_object_notify_by_pspec (G_OBJECT (window), obj_props[PROP_MAXIMIZED_VERTICALLY]);
   g_object_thaw_notify (G_OBJECT (window));
+
+  return TRUE;
 }
 
 void
@@ -2658,9 +2694,10 @@ meta_window_maximize (MetaWindow        *window,
           window->tile_mode = META_TILE_NONE;
         }
 
-      meta_window_maximize_internal (window,
+      if (!meta_window_maximize_internal (window,
                                      directions,
-                                     saved_rect);
+                                     saved_rect))
+        return;
 
       MetaRectangle old_frame_rect, old_buffer_rect;
 
@@ -2931,7 +2968,8 @@ meta_window_tile (MetaWindow   *window,
   else
     directions = META_MAXIMIZE_VERTICAL;
 
-  meta_window_maximize_internal (window, directions, NULL);
+  if (!meta_window_maximize_internal (window, directions, NULL))
+    return;
   meta_display_update_tile_preview (window->display, FALSE);
 
   /* Setup the edge constraints */
@@ -5451,6 +5489,7 @@ meta_window_recalc_features (MetaWindow *window)
 {
   gboolean old_has_close_func;
   gboolean old_has_minimize_func;
+  gboolean old_has_maximize_func;
   gboolean old_has_move_func;
   gboolean old_has_resize_func;
   gboolean old_has_shade_func;
@@ -5459,6 +5498,7 @@ meta_window_recalc_features (MetaWindow *window)
 
   old_has_close_func = window->has_close_func;
   old_has_minimize_func = window->has_minimize_func;
+  old_has_maximize_func = window->has_maximize_func;
   old_has_move_func = window->has_move_func;
   old_has_resize_func = window->has_resize_func;
   old_has_shade_func = window->has_shade_func;
@@ -5582,8 +5622,8 @@ meta_window_recalc_features (MetaWindow *window)
       meta_window_get_work_area_current_monitor (window, &work_area);
       meta_window_frame_rect_to_client_rect (window, &work_area, &client_rect);
 
-      if (window->size_hints.min_width >= client_rect.width ||
-          window->size_hints.min_height >= client_rect.height)
+      if (window->size_hints.min_width > client_rect.width ||
+          window->size_hints.min_height > client_rect.height)
         window->has_maximize_func = FALSE;
     }
 
@@ -5642,6 +5682,9 @@ meta_window_recalc_features (MetaWindow *window)
     g_object_notify_by_pspec (G_OBJECT (window), obj_props[PROP_RESIZEABLE]);
 
   meta_window_frame_size_changed (window);
+
+  if (window->has_maximize_func != old_has_maximize_func)
+    g_signal_emit (window, window_signals[CAN_MAXIMIZE_CHANGED], 0);
 
   /* FIXME perhaps should ensure if we don't have a shade func,
    * we aren't shaded, etc.
@@ -7949,6 +7992,8 @@ void
 meta_window_set_transient_for (MetaWindow *window,
                                MetaWindow *parent)
 {
+  MetaWindow *old_transient_for = window->transient_for;
+
   if (check_transient_for_loop (window, parent))
     {
       meta_warning ("Setting %s transient for %s would create a loop.",
@@ -8015,6 +8060,9 @@ meta_window_set_transient_for (MetaWindow *window,
 
   if (window->appears_focused && window->transient_for != NULL)
     meta_window_propagate_focus_appearance (window, TRUE);
+
+  if (window->transient_for != old_transient_for)
+    g_signal_emit (window, window_signals[TRANSIENT_FOR_CHANGED], 0);
 }
 
 void
@@ -8665,4 +8713,17 @@ meta_window_calculate_bounds (MetaWindow *window,
     {
       return FALSE;
     }
+}
+
+void
+meta_window_set_can_grab (MetaWindow *window,
+                          gboolean    can_grab)
+{
+  if (window->can_grab == can_grab)
+    return;
+
+  window->can_grab = can_grab;
+
+  if (!window->can_grab && window->display->grab_window == window)
+    meta_display_end_grab_op (window->display, meta_display_get_current_time_roundtrip (window->display));
 }
