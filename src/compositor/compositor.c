@@ -130,8 +130,6 @@ typedef struct _MetaCompositorPrivate
 
   int disable_unredirect_count;
 
-  int switch_workspace_in_progress;
-
   gboolean frame_in_progress;
 
   MetaPluginManager *plugin_mgr;
@@ -155,39 +153,6 @@ on_top_window_actor_destroyed (MetaWindowActor *window_actor,
                                MetaCompositor  *compositor);
 
 static void sync_actor_stacking (MetaCompositor *compositor);
-
-static void
-meta_finish_workspace_switch (MetaCompositor *compositor)
-{
-  MetaCompositorPrivate *priv =
-    meta_compositor_get_instance_private (compositor);
-  GList *l;
-
-  /* Finish hiding and showing actors for the new workspace */
-  for (l = priv->windows; l; l = l->next)
-    meta_window_actor_sync_visibility (l->data);
-
-  /* Fix up stacking order. */
-  sync_actor_stacking (compositor);
-}
-
-void
-meta_switch_workspace_completed (MetaCompositor *compositor)
-{
-  MetaCompositorPrivate *priv =
-    meta_compositor_get_instance_private (compositor);
-
-  /* FIXME -- must redo stacking order */
-  priv->switch_workspace_in_progress--;
-  if (priv->switch_workspace_in_progress < 0)
-    {
-      g_warning ("Error in workspace_switch accounting!");
-      priv->switch_workspace_in_progress = 0;
-    }
-
-  if (!priv->switch_workspace_in_progress)
-    meta_finish_workspace_switch (compositor);
-}
 
 void
 meta_compositor_destroy (MetaCompositor *compositor)
@@ -677,22 +642,10 @@ meta_compositor_switch_workspace (MetaCompositor     *compositor,
   to_indx   = meta_workspace_index (to);
   from_indx = meta_workspace_index (from);
 
-  priv->switch_workspace_in_progress++;
-
-  if (!meta_plugin_manager_switch_workspace (priv->plugin_mgr,
-                                             from_indx,
-                                             to_indx,
-                                             direction))
-    {
-      priv->switch_workspace_in_progress--;
-
-      /* We have to explicitly call this to fix up stacking order of the
-       * actors; this is because the abs stacking position of actors does not
-       * necessarily change during the window hiding/unhiding, only their
-       * relative position toward the destkop window.
-       */
-      meta_finish_workspace_switch (compositor);
-    }
+  meta_plugin_manager_switch_workspace (priv->plugin_mgr,
+                                        from_indx,
+                                        to_indx,
+                                        direction);
 }
 
 static void
@@ -1630,15 +1583,6 @@ meta_compositor_get_top_window_actor (MetaCompositor *compositor)
     meta_compositor_get_instance_private (compositor);
 
   return priv->top_window_actor;
-}
-
-gboolean
-meta_compositor_is_switching_workspace (MetaCompositor *compositor)
-{
-  MetaCompositorPrivate *priv =
-    meta_compositor_get_instance_private (compositor);
-
-  return priv->switch_workspace_in_progress > 0;
 }
 
 MetaLaters *
