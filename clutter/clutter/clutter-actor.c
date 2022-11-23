@@ -689,6 +689,8 @@ struct _ClutterActorPrivate
   /* the cached transformation matrix; see apply_transform() */
   graphene_matrix_t transform;
 
+  graphene_matrix_t absolute_modelview;
+
   float resource_scale;
 
   guint8 opacity;
@@ -804,6 +806,9 @@ struct _ClutterActorPrivate
 
   unsigned int n_pointers;
 
+  gboolean has_next_redraw_clip;
+  ClutterPaintVolume next_redraw_clip;
+
   /* bitfields: KEEP AT THE END */
 
   /* fixed position and sizes */
@@ -842,9 +847,14 @@ struct _ClutterActorPrivate
   guint needs_x_expand              : 1;
   guint needs_y_expand              : 1;
   guint needs_paint_volume_update   : 1;
+  guint needs_visible_paint_volume_update : 1;
   guint had_effects_on_last_paint_volume_update : 1;
   guint needs_update_stage_views    : 1;
   guint clear_stage_views_needs_stage_views_changed : 1;
+  guint needs_finish_layout : 1;
+  guint needs_redraw : 1;
+  guint has_inverse_transform       : 1;
+  guint absolute_modelview_valid : 1;
 };
 
 enum
@@ -1509,6 +1519,8 @@ queue_update_paint_volume (ClutterActor *actor)
   while (actor)
     {
       actor->priv->needs_paint_volume_update = TRUE;
+      actor->priv->needs_visible_paint_volume_update = TRUE;
+      actor->priv->needs_finish_layout = TRUE;
       actor = actor->priv->parent;
     }
 }
@@ -1528,6 +1540,19 @@ clutter_actor_real_map (ClutterActor *self)
 
   if (priv->unmapped_paint_branch_counter == 0)
     {
+      /* Invariant that needs_finish_layout is set all the way up to the stage
+       * needs to be met.
+       */
+      if (priv->needs_finish_layout)
+        {
+          iter = priv->parent;
+          while (iter && !iter->priv->needs_finish_layout)
+            {
+              iter->priv->needs_finish_layout = TRUE;
+              iter = iter->priv->parent;
+            }
+        }
+
       /* Avoid the early return in clutter_actor_queue_relayout() */
       priv->needs_width_request = FALSE;
       priv->needs_height_request = FALSE;
@@ -1651,12 +1676,6 @@ clutter_actor_real_unmap (ClutterActor *self)
 
   if (priv->unmapped_paint_branch_counter == 0)
     {
-      /* clear the contents of the visible paint volume, so that hiding + moving +
-       * showing will not result in the wrong area being repainted
-       */
-      _clutter_paint_volume_init_static (&priv->visible_paint_volume, NULL);
-      priv->visible_paint_volume_valid = TRUE;
-
       if (priv->parent && !CLUTTER_ACTOR_IN_DESTRUCTION (priv->parent))
         {
           if (G_UNLIKELY (priv->parent->flags & CLUTTER_ACTOR_NO_LAYOUT))
@@ -2148,9 +2167,6 @@ unrealize_actor_after_children_cb (ClutterActor *self,
       priv->parent->flags & CLUTTER_ACTOR_NO_LAYOUT)
     clutter_stage_dequeue_actor_relayout (CLUTTER_STAGE (stage), self);
 
-  if (stage != NULL)
-    clutter_stage_dequeue_actor_redraw (CLUTTER_STAGE (stage), self);
-
   if (priv->unmapped_paint_branch_counter == 0)
     priv->allocation = (ClutterActorBox) CLUTTER_ACTOR_BOX_UNINITIALIZED;
 
@@ -2480,6 +2496,13 @@ static void
 absolute_geometry_changed (ClutterActor *actor)
 {
   actor->priv->needs_update_stage_views = TRUE;
+  actor->priv->needs_visible_paint_volume_update = TRUE;
+  actor->priv->absolute_modelview_valid = FALSE;
+
+  actor->priv->needs_finish_layout = TRUE;
+  /* needs_finish_layout is already TRUE on the whole parent tree thanks
+   * to queue_update_paint_volume() that was called by transform_changed().
+   */
 }
 
 static ClutterActorTraverseVisitFlags
@@ -2859,8 +2882,6 @@ clutter_actor_apply_transform_to_point (ClutterActor             *self,
  * instead.
  *
  */
-/* XXX: We should consider caching the stage relative modelview along with
- * the actor itself */
 static void
 _clutter_actor_get_relative_transformation_matrix (ClutterActor      *self,
                                                    ClutterActor      *ancestor,
@@ -3100,6 +3121,30 @@ _clutter_actor_apply_relative_transformation_matrix (ClutterActor      *self,
   if (self == ancestor)
     return;
 
+  if (ancestor == NULL)
+    {
+      ClutterActorPrivate *priv = self->priv;
+
+      if (!priv->absolute_modelview_valid)
+        {
+          graphene_matrix_init_identity (&priv->absolute_modelview);
+
+          if (priv->parent != NULL)
+            {
+              _clutter_actor_apply_relative_transformation_matrix (priv->parent,
+                                                                   NULL,
+                                                                   &priv->absolute_modelview);
+            }
+
+          _clutter_actor_apply_modelview_transform (self, &priv->absolute_modelview);
+
+          priv->absolute_modelview_valid = TRUE;
+        }
+
+      graphene_matrix_multiply (&priv->absolute_modelview, matrix, matrix);
+      return;
+    }
+
   if (self->priv->parent != NULL)
     _clutter_actor_apply_relative_transformation_matrix (self->priv->parent,
                                                          ancestor,
@@ -3107,7 +3152,37 @@ _clutter_actor_apply_relative_transformation_matrix (ClutterActor      *self,
 
   _clutter_actor_apply_modelview_transform (self, matrix);
 }
+#if 0
+graphene_matrix_t *
+clutter_actor_get_absolute_modelview (ClutterActor *self)
+{
+  ClutterActorPrivate *priv = self->priv;
 
+  if (priv->absolute_modelview_valid) {
+    return &priv->absolute_modelview;
+  }
+
+  graphene_matrix_init_identity (&priv->absolute_modelview);
+
+  if (priv->parent == NULL)
+    {
+      /* No parents, this must be the stage... */
+
+    }
+  else
+    {
+      graphene_matrix_multiply (&priv->absolute_modelview,
+                                clutter_actor_get_absolute_modelview (priv->parent),
+                                &priv->absolute_modelview);
+    }
+
+  _clutter_actor_apply_modelview_transform (self,
+                                            &priv->absolute_modelview);
+
+  priv->absolute_modelview_valid = TRUE;
+  return &priv->absolute_modelview;
+}
+#endif
 static void
 _clutter_actor_draw_paint_volume_full (ClutterActor       *self,
                                        ClutterPaintVolume *pv,
@@ -7587,7 +7662,9 @@ clutter_actor_init (ClutterActor *self)
   priv->needs_height_request = TRUE;
   priv->needs_allocation = TRUE;
   priv->needs_paint_volume_update = TRUE;
+  priv->needs_visible_paint_volume_update = TRUE;
   priv->needs_update_stage_views = TRUE;
+  priv->needs_finish_layout = TRUE;
 
   priv->cached_width_age = 1;
   priv->cached_height_age = 1;
@@ -7595,11 +7672,8 @@ clutter_actor_init (ClutterActor *self)
   priv->opacity_override = -1;
   priv->enable_model_view_transform = TRUE;
 
-  /* We're not visible yet,  so the visible_paint_volume is empty */
-  _clutter_paint_volume_init_static (&priv->visible_paint_volume, NULL);
-  priv->visible_paint_volume_valid = TRUE;
-
   priv->transform_valid = FALSE;
+  priv->absolute_modelview_valid = FALSE;
 
   /* the default is to stretch the content, to match the
    * current behaviour of basically all actors. also, it's
@@ -7684,7 +7758,7 @@ _clutter_actor_queue_redraw_full (ClutterActor             *self,
    * The process starts in clutter_actor_queue_redraw() which is a
    * wrapper for this function. Additionally, an effect can queue a
    * redraw by wrapping this function in clutter_effect_queue_repaint().
-   *
+   *FIXME
    * This functions queues an entry in a list associated with the
    * stage which is a list of actors that queued a redraw while
    * updating the timelines, performing layouting and processing other
@@ -7735,6 +7809,51 @@ _clutter_actor_queue_redraw_full (ClutterActor             *self,
   /* ignore queueing a redraw on stages that are being destroyed */
   if (CLUTTER_ACTOR_IN_DESTRUCTION (stage))
     return;
+
+  if (priv->needs_redraw)
+    {
+      /* Ignore all requests to queue a redraw for an actor if a full
+       * (non-clipped) redraw of the actor has already been queued. */
+      if (!priv->has_next_redraw_clip)
+        {
+          CLUTTER_NOTE (CLIPPING, "Bail from stage_queue_actor_redraw (%s): "
+                        "Unclipped redraw of actor already queued",
+                        _clutter_actor_get_debug_name (self));
+          return;
+        }
+
+      /* If queuing a clipped redraw and a clipped redraw has
+       * previously been queued for this actor then combine the latest
+       * clip together with the existing clip */
+      if (volume)
+        clutter_paint_volume_union (&priv->next_redraw_clip, volume);
+      else
+        {
+          clutter_paint_volume_free (&priv->next_redraw_clip);
+          priv->has_next_redraw_clip = FALSE;
+        }
+    }
+  else
+    {
+      if (volume)
+        {
+          priv->has_next_redraw_clip = TRUE;
+          _clutter_paint_volume_init_static (&priv->next_redraw_clip, self);
+          _clutter_paint_volume_set_from_volume (&priv->next_redraw_clip, volume);
+        }
+      else
+        priv->has_next_redraw_clip = FALSE;
+
+      priv->needs_redraw = TRUE;
+    }
+
+  ClutterActor *iter = self;
+  while (iter && !iter->priv->needs_finish_layout)
+    {
+      iter->priv->needs_finish_layout = TRUE;
+      iter = iter->priv->parent;
+    }
+
 
   clutter_stage_queue_actor_redraw (CLUTTER_STAGE (stage),
                                     self,
@@ -15255,6 +15374,7 @@ clear_stage_views_cb (ClutterActor *actor,
   g_autoptr (GList) old_stage_views = NULL;
 
   actor->priv->needs_update_stage_views = TRUE;
+  actor->priv->needs_finish_layout = TRUE;
 
   old_stage_views = g_steal_pointer (&actor->priv->stage_views);
 
@@ -15389,6 +15509,43 @@ clutter_actor_get_resource_scale (ClutterActor *self)
   return ceilf (clutter_actor_get_real_resource_scale (self));
 }
 
+static void
+add_actor_to_redraw_clip (ClutterActor       *self,
+                          gboolean            actor_moved,
+                          ClutterPaintVolume *old_visible_paint_volume)
+{
+  ClutterActorPrivate *priv = self->priv;
+  ClutterStage *stage = CLUTTER_STAGE (_clutter_actor_get_stage_internal (self));
+
+  if (priv->has_next_redraw_clip)
+    {
+      clutter_stage_add_to_redraw_clip (stage, &priv->next_redraw_clip);
+    }
+  else if (actor_moved)
+    {
+      /* For a clipped redraw to work we need both the old paint volume and the new
+       * one, if any is missing we'll need to do an unclipped redraw.
+       */
+      if (old_visible_paint_volume == NULL || !priv->visible_paint_volume_valid)
+        goto full_stage_redraw;
+
+      clutter_stage_add_to_redraw_clip (stage, old_visible_paint_volume);
+      clutter_stage_add_to_redraw_clip (stage, &priv->visible_paint_volume);
+    }
+  else
+    {
+      if (!priv->visible_paint_volume_valid)
+        goto full_stage_redraw;
+
+      clutter_stage_add_to_redraw_clip (stage, &priv->visible_paint_volume);
+    }
+
+  return;
+
+full_stage_redraw:
+  clutter_stage_add_to_redraw_clip (stage, NULL);
+}
+
 static gboolean
 sorted_lists_equal (GList *list_a,
                     GList *list_b)
@@ -15418,25 +15575,61 @@ update_stage_views (ClutterActor *self)
   ClutterActorPrivate *priv = self->priv;
   g_autoptr (GList) old_stage_views = NULL;
   ClutterStage *stage;
+  GList *all_views;
+  ClutterActorBox stage_paint_box;
   graphene_rect_t bounding_rect;
 
-  old_stage_views = g_steal_pointer (&priv->stage_views);
-
-  if (priv->needs_allocation)
+  if (!priv->visible_paint_volume_valid)
     {
-      g_warning ("Can't update stage views actor %s is on because it needs an "
-                 "allocation.", _clutter_actor_get_debug_name (self));
+      g_warning ("Can't update stage views actor %s is on because "
+                 "!visible_paint_volume_valid.", _clutter_actor_get_debug_name (self));
+  old_stage_views = g_steal_pointer (&priv->stage_views);
       goto out;
     }
 
   stage = CLUTTER_STAGE (_clutter_actor_get_stage_internal (self));
   g_return_if_fail (stage);
 
-  clutter_actor_get_transformed_extents (self, &bounding_rect);
+  all_views = clutter_stage_peek_stage_views (stage);
 
-  if (bounding_rect.size.width == 0.0 ||
-      bounding_rect.size.height == 0.0)
+/* We take a few fast paths when there only is a single stage view globally,
+   note that this introduces special behavior for the "just a single view" case
+   compared to the "multiple views" case: If an actor is zero-size or located outside
+   the stage, it will have a stage view set in the "single view" case */
+  if (all_views && all_views->next == NULL)
+    {
+      if (priv->stage_views && priv->stage_views->next == NULL) {
+        if (priv->stage_views->data == all_views->data) {
+  //g_warning("hit the very fast path");
+          return;
+  }
+
+//g_warning("hit the less fast path");
+        priv->stage_views->data = all_views->data;
+        g_signal_emit (self, actor_signals[STAGE_VIEWS_CHANGED], 0);
+      }
+
+/* now we either have zero views or multiple views */
+      old_stage_views = g_steal_pointer (&priv->stage_views);
+
+      priv->stage_views = g_list_prepend (NULL, all_views->data);
+      g_signal_emit (self, actor_signals[STAGE_VIEWS_CHANGED], 0);
+      return;
+    }
+
+  old_stage_views = g_steal_pointer (&priv->stage_views);
+
+  _clutter_paint_volume_get_stage_paint_box (&priv->visible_paint_volume,
+                                             stage,
+                                             &stage_paint_box);
+
+  if (clutter_actor_box_get_area (&stage_paint_box) == 0.0)
     goto out;
+
+  bounding_rect = GRAPHENE_RECT_INIT (stage_paint_box.x1,
+                                      stage_paint_box.y1,
+                                      stage_paint_box.x2 - stage_paint_box.x1,
+                                      stage_paint_box.y2 - stage_paint_box.y1);
 
   priv->stage_views = clutter_stage_get_views_for_rect (stage,
                                                         &bounding_rect);
@@ -15483,23 +15676,37 @@ clutter_actor_finish_layout (ClutterActor *self,
 {
   ClutterActorPrivate *priv = self->priv;
   ClutterActor *child;
+  gboolean actor_moved = FALSE;
+  gboolean old_visible_paint_volume_valid = FALSE;
+  ClutterPaintVolume old_visible_paint_volume;
+
+  if (!priv->needs_finish_layout)
+    return;
 
   if ((!CLUTTER_ACTOR_IS_MAPPED (self) &&
        !clutter_actor_has_mapped_clones (self)) ||
       CLUTTER_ACTOR_IN_DESTRUCTION (self))
     return;
 
-  ensure_paint_volume (self);
-
-  if (priv->has_paint_volume)
+  if (priv->needs_visible_paint_volume_update)
     {
-      _clutter_paint_volume_copy_static (&priv->paint_volume,
-                                         &priv->visible_paint_volume);
-      _clutter_paint_volume_transform_relative (&priv->visible_paint_volume,
-                                                NULL); /* eye coordinates */
-    }
+      ensure_paint_volume (self);
 
-  priv->visible_paint_volume_valid = priv->has_paint_volume;
+      actor_moved = TRUE;
+      old_visible_paint_volume = priv->visible_paint_volume;
+      old_visible_paint_volume_valid = priv->visible_paint_volume_valid;
+
+      if (priv->has_paint_volume)
+        {
+          _clutter_paint_volume_copy_static (&priv->paint_volume,
+                                             &priv->visible_paint_volume);
+          _clutter_paint_volume_transform_relative (&priv->visible_paint_volume,
+                                                    NULL); /* eye coordinates */
+        }
+
+      priv->visible_paint_volume_valid = priv->has_paint_volume;
+      priv->needs_visible_paint_volume_update = FALSE;
+    }
 
   if (priv->needs_update_stage_views)
     {
@@ -15508,6 +15715,16 @@ clutter_actor_finish_layout (ClutterActor *self,
 
       priv->needs_update_stage_views = FALSE;
     }
+
+  if (priv->needs_redraw)
+    {
+      add_actor_to_redraw_clip (self,
+                                actor_moved,
+                                old_visible_paint_volume_valid ? &old_visible_paint_volume : NULL);
+      priv->needs_redraw = FALSE;
+    }
+
+  priv->needs_finish_layout = FALSE;
 
   for (child = priv->first_child; child; child = child->priv->next_sibling)
     clutter_actor_finish_layout (child, use_max_scale);
@@ -19061,27 +19278,6 @@ clutter_actor_invalidate_paint_volume (ClutterActor *self)
   g_return_if_fail (CLUTTER_IS_ACTOR (self));
 
   queue_update_paint_volume (self);
-}
-
-gboolean
-clutter_actor_get_redraw_clip (ClutterActor       *self,
-                               ClutterPaintVolume *dst_old_pv,
-                               ClutterPaintVolume *dst_new_pv)
-{
-  ClutterActorPrivate *priv = self->priv;
-
-  ensure_paint_volume (self);
-
-  /* For a clipped redraw to work we need both the old paint volume and the new
-   * one, if any is missing we'll need to do an unclipped redraw.
-   */
-  if (!priv->visible_paint_volume_valid || !priv->has_paint_volume)
-    return FALSE;
-
-  _clutter_paint_volume_set_from_volume (dst_old_pv, &priv->visible_paint_volume);
-  _clutter_paint_volume_set_from_volume (dst_new_pv, &priv->paint_volume);
-
-  return TRUE;
 }
 
 void
