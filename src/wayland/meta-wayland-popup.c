@@ -190,6 +190,7 @@ meta_wayland_popup_grab_begin (MetaWaylandPopupGrab *grab,
   MetaWindow *window = meta_wayland_surface_get_window (surface);
 
   meta_wayland_pointer_start_grab (pointer, (MetaWaylandPointerGrab*)grab);
+#if 0
   meta_display_begin_grab_op (window->display,
                               window,
                               META_GRAB_OP_WAYLAND_POPUP,
@@ -201,6 +202,7 @@ meta_wayland_popup_grab_begin (MetaWaylandPopupGrab *grab,
                                 window->display),
                               pointer->grab_x,
                               pointer->grab_y);
+#endif
 }
 
 void
@@ -218,8 +220,8 @@ meta_wayland_popup_grab_end (MetaWaylandPopupGrab *grab)
 
   {
     MetaDisplay *display = meta_get_display ();
-    meta_display_end_grab_op (display,
-                              meta_display_get_current_time_roundtrip (display));
+  //  meta_display_end_grab_op (display,
+    //                          meta_display_get_current_time_roundtrip (display));
   }
 
   meta_wayland_pointer_end_grab (grab->generic.pointer);
