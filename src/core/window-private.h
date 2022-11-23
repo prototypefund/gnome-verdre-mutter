@@ -669,7 +669,7 @@ void        meta_window_restore_tile       (MetaWindow        *window,
                                             MetaTileMode       mode,
                                             int                width,
                                             int                height);
-void        meta_window_maximize_internal  (MetaWindow        *window,
+gboolean    meta_window_maximize_internal  (MetaWindow        *window,
                                             MetaMaximizeFlags  directions,
                                             MetaRectangle     *saved_rect);
 

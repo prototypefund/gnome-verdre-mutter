@@ -2591,7 +2591,7 @@ meta_window_save_rect (MetaWindow *window)
     }
 }
 
-void
+gboolean
 meta_window_maximize_internal (MetaWindow        *window,
                                MetaMaximizeFlags  directions,
                                MetaRectangle     *saved_rect)
@@ -2601,6 +2601,9 @@ meta_window_maximize_internal (MetaWindow        *window,
   maximize_horizontally = directions & META_MAXIMIZE_HORIZONTAL;
   maximize_vertically   = directions & META_MAXIMIZE_VERTICAL;
   g_assert (maximize_horizontally || maximize_vertically);
+
+  if (!window->has_maximize_func)
+    return FALSE;
 
   meta_topic (META_DEBUG_WINDOW_OPS,
               "Maximizing %s%s",
@@ -2635,6 +2638,8 @@ meta_window_maximize_internal (MetaWindow        *window,
   g_object_notify_by_pspec (G_OBJECT (window), obj_props[PROP_MAXIMIZED_HORIZONTALLY]);
   g_object_notify_by_pspec (G_OBJECT (window), obj_props[PROP_MAXIMIZED_VERTICALLY]);
   g_object_thaw_notify (G_OBJECT (window));
+
+  return TRUE;
 }
 
 void
@@ -2689,9 +2694,10 @@ meta_window_maximize (MetaWindow        *window,
           window->tile_mode = META_TILE_NONE;
         }
 
-      meta_window_maximize_internal (window,
+      if (!meta_window_maximize_internal (window,
                                      directions,
-                                     saved_rect);
+                                     saved_rect))
+        return;
 
       MetaRectangle old_frame_rect, old_buffer_rect;
 
@@ -2962,7 +2968,8 @@ meta_window_tile (MetaWindow   *window,
   else
     directions = META_MAXIMIZE_VERTICAL;
 
-  meta_window_maximize_internal (window, directions, NULL);
+  if (!meta_window_maximize_internal (window, directions, NULL))
+    return;
   meta_display_update_tile_preview (window->display, FALSE);
 
   /* Setup the edge constraints */
