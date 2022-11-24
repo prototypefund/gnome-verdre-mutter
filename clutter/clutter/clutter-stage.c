@@ -3705,39 +3705,12 @@ clutter_stage_pick_and_update_device (ClutterStage             *stage,
 }
 
 static void
-sequence_grab_actor_destroyed (ClutterActor       *actor,
-                               PointerDeviceEntry *entry);
-
-static void
-sequence_grab_actor_mapped_changed (ClutterActor       *actor,
-                                    GParamSpec         *spec,
-                                    PointerDeviceEntry *entry);
-
-static void
-cleanup_sequence_grab (PointerDeviceEntry *entry)
-{
-  g_signal_handlers_disconnect_by_func (entry->sequence_grab_actor,
-                                        G_CALLBACK (sequence_grab_actor_destroyed),
-                                        entry);
-  g_signal_handlers_disconnect_by_func (entry->sequence_grab_actor,
-                                        G_CALLBACK (sequence_grab_actor_mapped_changed),
-                                        entry);
-  entry->sequence_grab_actor = NULL;
-  g_array_remove_range (entry->event_emission_chain, 0,
-                        entry->event_emission_chain->len);
-
-  entry->press_count = 0;
-}
-
-static void
 clutter_stage_notify_grab_on_pointer_entry (ClutterStage       *stage,
                                             PointerDeviceEntry *entry,
                                             ClutterActor       *grab_actor,
                                             ClutterActor       *old_grab_actor)
 {
-  ClutterStagePrivate *priv = stage->priv;
   gboolean pointer_in_grab, pointer_in_old_grab;
-  gboolean sequence_grab_cancelled = FALSE;
   ClutterEventType event_type = CLUTTER_NOTHING;
   ClutterActor *topmost, *deepmost;
 
@@ -3753,55 +3726,6 @@ clutter_stage_notify_grab_on_pointer_entry (ClutterStage       *stage,
     old_grab_actor == entry->current_actor ||
     clutter_actor_contains (old_grab_actor, entry->current_actor);
 
-  if (grab_actor && entry->press_count > 0)
-    {
-      ClutterInputDevice *device = entry->device;
-      ClutterEventSequence *sequence = entry->sequence;
-      unsigned int i;
-      unsigned int n_removed = 0;
-
-      for (i = 0; i < entry->event_emission_chain->len; i++)
-        {
-          EventReceiver *receiver =
-            &g_array_index (entry->event_emission_chain, EventReceiver, i);
-
-          if (receiver->actor)
-            {
-              if (!clutter_actor_contains (grab_actor, receiver->actor))
-                {
-                  g_clear_object (&receiver->actor);
-                  n_removed++;
-                }
-            }
-          else if (receiver->action)
-            {
-              ClutterActor *action_actor =
-                clutter_actor_meta_get_actor (CLUTTER_ACTOR_META (receiver->action));
-
-              if (!action_actor || !clutter_actor_contains (grab_actor, action_actor))
-                {
-                  clutter_action_sequences_cancelled (receiver->action,
-                                                      device,
-                                                      sequence,
-                                                      sequence ? 1 : 0);
-                  g_clear_object (&receiver->action);
-                  n_removed++;
-                }
-            }
-        }
-
-      if (entry->event_emission_chain->len == 0)
-        sequence_grab_cancelled = TRUE;
-
-      if (n_removed > 0)
-        {
-          CLUTTER_NOTE (GRABS,
-                        "[grab=%p device=%p sequence=%p] Cancelled %u actors "
-                        "and actions on sequence grab due to new seat grab",
-                        priv->topmost_grab, device, sequence, n_removed);
-        }
-    }
-
   /* Equate NULL actors to the stage here, to ease calculations further down. */
   if (!grab_actor)
     grab_actor = CLUTTER_ACTOR (stage);
@@ -3809,10 +3733,7 @@ clutter_stage_notify_grab_on_pointer_entry (ClutterStage       *stage,
     old_grab_actor = CLUTTER_ACTOR (stage);
 
   if (grab_actor == old_grab_actor)
-    {
-      g_assert (!sequence_grab_cancelled);
-      return;
-    }
+    return;
 
   if (pointer_in_grab && pointer_in_old_grab)
     {
@@ -3859,15 +3780,9 @@ clutter_stage_notify_grab_on_pointer_entry (ClutterStage       *stage,
       topmost = find_common_root_actor (stage, grab_actor, old_grab_actor);
     }
 
-  if (event_type == CLUTTER_ENTER && sequence_grab_cancelled)
-    cleanup_sequence_grab (entry);
-
   if (event_type != CLUTTER_NOTHING)
     {
       ClutterEvent *event;
-
-      if (entry->sequence_grab_actor)
-        deepmost = find_common_root_actor (stage, entry->sequence_grab_actor, deepmost);
 
       event = create_crossing_event (stage,
                                      entry->device,
@@ -3889,10 +3804,6 @@ clutter_stage_notify_grab_on_pointer_entry (ClutterStage       *stage,
 
       clutter_event_free (event);
     }
-
-    if ((event_type == CLUTTER_NOTHING || event_type == CLUTTER_LEAVE) &&
-        sequence_grab_cancelled)
-      cleanup_sequence_grab (entry);
 }
 
 static void
@@ -4389,7 +4300,17 @@ clutter_stage_maybe_lost_sequence_grab (ClutterStage         *self,
 
   sync_crossings_on_sequence_grab_end (self, entry);
 
-  cleanup_sequence_grab (entry);
+  g_signal_handlers_disconnect_by_func (entry->sequence_grab_actor,
+                                        G_CALLBACK (sequence_grab_actor_destroyed),
+                                        entry);
+  g_signal_handlers_disconnect_by_func (entry->sequence_grab_actor,
+                                        G_CALLBACK (sequence_grab_actor_mapped_changed),
+                                        entry);
+  entry->sequence_grab_actor = NULL;
+  g_array_remove_range (entry->event_emission_chain, 0,
+                        entry->event_emission_chain->len);
+
+  entry->press_count = 0;
 }
 
 static void
@@ -4557,7 +4478,14 @@ clutter_stage_emit_event (ClutterStage       *self,
       if (event->type == CLUTTER_BUTTON_RELEASE)
         sync_crossings_on_sequence_grab_end (self, entry);
 
-      cleanup_sequence_grab (entry);
+      g_signal_handlers_disconnect_by_func (entry->sequence_grab_actor,
+                                            G_CALLBACK (sequence_grab_actor_destroyed),
+                                            entry);
+      g_signal_handlers_disconnect_by_func (entry->sequence_grab_actor,
+                                            G_CALLBACK (sequence_grab_actor_mapped_changed),
+                                            entry);
+      entry->sequence_grab_actor = NULL;
+      g_array_remove_range (entry->event_emission_chain, 0, entry->event_emission_chain->len);
     }
 }
 
