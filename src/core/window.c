@@ -2231,8 +2231,8 @@ meta_window_show (MetaWindow *window)
           if (window->rect.width * window->rect.height > work_area.width * work_area.height * MAX_UNMAXIMIZED_WINDOW_AREA)
             {
 g_warning("WindowManager mutter Window tires to map too large size, automax after placement");
-              window->maximize_horizontally_after_placement = TRUE;
-              window->maximize_vertically_after_placement = TRUE;
+           //   window->maximize_horizontally_after_placement = TRUE;
+             // window->maximize_vertically_after_placement = TRUE;
             }
         }
       meta_window_force_placement (window, FALSE);
