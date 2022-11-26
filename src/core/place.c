@@ -869,14 +869,19 @@ meta_window_place (MetaWindow        *window,
                                                      &workarea);
       meta_window_get_frame_rect (window, &frame_rect);
 
-      /* If the window is bigger than the screen, then automaximize.  Do NOT
-       * auto-maximize the directions independently.  See #419810.
-       */
-      if (frame_rect.width >= workarea.width && frame_rect.height >= workarea.height)
-        {
-          window->maximize_horizontally_after_placement = TRUE;
-          window->maximize_vertically_after_placement = TRUE;
-        }
+          MetaMaximizeFlags max = 0;
+
+          if (frame_rect.width > workarea.width)
+            max |= META_MAXIMIZE_HORIZONTAL;
+
+          if (frame_rect.height > workarea.height)
+            max |= META_MAXIMIZE_VERTICAL;
+
+          if (max != 0) {
+                g_warning("WindowManager mutter auto unmaximizing because bigger than workarea");
+                meta_window_maximize (window, max);
+            }
+
     }
 
   /* "Origin" placement algorithm */

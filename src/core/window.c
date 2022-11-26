@@ -1079,8 +1079,6 @@ meta_window_constructed (GObject *object)
 
   window->maximized_horizontally = FALSE;
   window->maximized_vertically = FALSE;
-  window->maximize_horizontally_after_placement = FALSE;
-  window->maximize_vertically_after_placement = FALSE;
   window->minimize_after_placement = FALSE;
   window->fullscreen = FALSE;
   window->require_fully_onscreen = TRUE;
@@ -2227,12 +2225,18 @@ meta_window_show (MetaWindow *window)
         {
           MetaRectangle work_area;
           meta_window_get_work_area_for_monitor (window, window->monitor->number, &work_area);
-          /* Automaximize windows that map with a size > MAX_UNMAXIMIZED_WINDOW_AREA of the work area */
-          if (window->rect.width * window->rect.height > work_area.width * work_area.height * MAX_UNMAXIMIZED_WINDOW_AREA)
-            {
-g_warning("WindowManager mutter Window tires to map too large size, automax after placement");
-           //   window->maximize_horizontally_after_placement = TRUE;
-             // window->maximize_vertically_after_placement = TRUE;
+
+          MetaMaximizeFlags max = 0;
+
+          if (window->rect.width > work_area.width)
+            max |= META_MAXIMIZE_HORIZONTAL;
+
+          if (window->rect.height > work_area.height)
+            max |= META_MAXIMIZE_VERTICAL;
+
+          if (max != 0) {
+                g_warning("WindowManager mutter auto unmaximizing because bigger than workarea");
+                meta_window_maximize (window, max);
             }
         }
       meta_window_force_placement (window, FALSE);
@@ -2675,20 +2679,6 @@ meta_window_maximize (MetaWindow        *window,
             meta_display_get_current_time_roundtrip (window->display);
           meta_window_unshade (window, timestamp);
         }
-
-      /* if the window hasn't been placed yet, we'll maximize it then
-       */
-      if (!window->placed && !window->force_maximize)
-	{
-  g_warning ("WindowManager mutter try to max but not yet placed, doing later");
-	  window->maximize_horizontally_after_placement =
-            window->maximize_horizontally_after_placement ||
-            maximize_horizontally;
-	  window->maximize_vertically_after_placement =
-            window->maximize_vertically_after_placement ||
-            maximize_vertically;
-	  return;
-	}
 
       if (window->tile_mode != META_TILE_NONE)
         {

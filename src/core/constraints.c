@@ -589,41 +589,6 @@ place_window_if_needed(MetaWindow     *window,
 
   if (window->placed || did_placement)
     {
-      if ((window->maximize_horizontally_after_placement ||
-           window->maximize_vertically_after_placement))
-        {
-  g_warning ("WindowManager mutter maximizing after placement");
-
-          /* define a sane saved_rect so that the user can unmaximize to
-           * something reasonable.
-           */
-          if (info->current.width >= info->work_area_monitor.width)
-            {
-              info->current.width = .75 * info->work_area_monitor.width;
-              info->current.x = info->work_area_monitor.x +
-                       .125 * info->work_area_monitor.width;
-            }
-          if (info->current.height >= info->work_area_monitor.height)
-            {
-              info->current.height = .75 * info->work_area_monitor.height;
-              info->current.y = info->work_area_monitor.y +
-                       .083 * info->work_area_monitor.height;
-            }
-
-          /* idle_move_resize() uses the unconstrained_rect, so make sure it
-           * uses the placed coordinates (bug #556696).
-           */
-          window->unconstrained_rect = info->current;
-
-          meta_window_maximize_internal (window,
-              (window->maximize_horizontally_after_placement ?
-               META_MAXIMIZE_HORIZONTAL : 0 ) |
-              (window->maximize_vertically_after_placement ?
-               META_MAXIMIZE_VERTICAL : 0), &info->current);
-        }
-
-      window->maximize_horizontally_after_placement = FALSE;
-      window->maximize_vertically_after_placement = FALSE;
 
       if (window->minimize_after_placement)
         {

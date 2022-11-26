@@ -791,16 +791,17 @@ reload_net_wm_state (MetaWindow    *window,
 
   if (value->type == META_PROP_VALUE_INVALID)
     return;
-
+          MetaMaximizeFlags max = 0;
   i = 0;
   while (i < value->v.atom_list.n_atoms)
     {
+
       if (value->v.atom_list.atoms[i] == x11_display->atom__NET_WM_STATE_SHADED)
         window->shaded = TRUE;
       else if (value->v.atom_list.atoms[i] == x11_display->atom__NET_WM_STATE_MAXIMIZED_HORZ)
-        window->maximize_horizontally_after_placement = TRUE;
+            max |= META_MAXIMIZE_HORIZONTAL;
       else if (value->v.atom_list.atoms[i] == x11_display->atom__NET_WM_STATE_MAXIMIZED_VERT)
-        window->maximize_vertically_after_placement = TRUE;
+            max |= META_MAXIMIZE_VERTICAL;
       else if (value->v.atom_list.atoms[i] == x11_display->atom__NET_WM_STATE_HIDDEN)
         window->minimize_after_placement = TRUE;
       else if (value->v.atom_list.atoms[i] == x11_display->atom__NET_WM_STATE_MODAL)
@@ -825,6 +826,11 @@ reload_net_wm_state (MetaWindow    *window,
 
       ++i;
     }
+
+          if (max != 0) {
+                g_warning("WindowManager mutter auto unmaximizing because bigger than workarea");
+                meta_window_maximize (window, max);
+            }
 
   meta_verbose ("Reloaded _NET_WM_STATE for %s",
                 window->desc);
