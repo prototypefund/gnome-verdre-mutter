@@ -589,8 +589,7 @@ place_window_if_needed(MetaWindow     *window,
 
   if (window->placed || did_placement)
     {
-      if (meta_window_can_maximize (window) &&
-          (window->maximize_horizontally_after_placement ||
+      if ((window->maximize_horizontally_after_placement ||
            window->maximize_vertically_after_placement))
         {
   g_warning ("WindowManager mutter maximizing after placement");

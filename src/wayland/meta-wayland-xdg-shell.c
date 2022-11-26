@@ -432,6 +432,9 @@ xdg_toplevel_set_maximized (struct wl_client   *client,
   if (!window)
     return;
 
+if (window->force_maximize)
+  return;
+
   meta_window_force_placement (window, TRUE);
 g_warning("WindowManager mutter: forcing window to max xdg shell");
   meta_window_maximize (window, META_MAXIMIZE_BOTH);
@@ -450,6 +453,9 @@ xdg_toplevel_unset_maximized (struct wl_client   *client,
 
   if (!window->can_grab)
     return;
+
+if (window->force_maximize)
+  return;
 
 g_warning("WindowManager mutter: forcing window to unmax xdg shell");
   meta_window_unmaximize (window, META_MAXIMIZE_BOTH);
@@ -874,7 +880,9 @@ meta_wayland_xdg_toplevel_post_apply_state (MetaWaylandSurfaceRole  *surface_rol
                                               pending->new_max_width,
                                               pending->new_max_height);
 
+g_warning("WindowManager mutter: size hints change, recalc and queue resize");
           meta_window_recalc_features (window);
+    meta_window_queue (window, META_QUEUE_MOVE_RESIZE);
         }
       else
         {

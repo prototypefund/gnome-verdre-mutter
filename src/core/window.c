@@ -764,6 +764,8 @@ meta_window_class_init (MetaWindowClass *klass)
   /**
    * MetaWindow::can-maximize-changed:
    * @window: a #MetaWindow
+   * @can_max_vert: as
+   * @can_max_horiz: as
    *
    * Emitted when can-maximize of the window has changed.
    */
@@ -773,7 +775,8 @@ meta_window_class_init (MetaWindowClass *klass)
                   G_SIGNAL_RUN_LAST,
                   0,
                   NULL, NULL, NULL,
-                  G_TYPE_NONE, 0);
+                  G_TYPE_NONE, 2,
+                  G_TYPE_BOOLEAN, G_TYPE_BOOLEAN);
 }
 
 static void
@@ -1130,6 +1133,8 @@ meta_window_constructed (GObject *object)
   window->has_close_func = TRUE;
   window->has_minimize_func = TRUE;
   window->has_maximize_func = TRUE;
+  window->has_maximize_vert_func = TRUE;
+  window->has_maximize_horiz_func = TRUE;
   window->has_move_func = TRUE;
   window->has_resize_func = TRUE;
 
@@ -2225,6 +2230,7 @@ meta_window_show (MetaWindow *window)
           /* Automaximize windows that map with a size > MAX_UNMAXIMIZED_WINDOW_AREA of the work area */
           if (window->rect.width * window->rect.height > work_area.width * work_area.height * MAX_UNMAXIMIZED_WINDOW_AREA)
             {
+g_warning("WindowManager mutter Window tires to map too large size, automax after placement");
               window->maximize_horizontally_after_placement = TRUE;
               window->maximize_vertically_after_placement = TRUE;
             }
@@ -2602,11 +2608,6 @@ meta_window_maximize_internal (MetaWindow        *window,
   maximize_vertically   = directions & META_MAXIMIZE_VERTICAL;
   g_assert (maximize_horizontally || maximize_vertically);
 
-  if (!window->has_maximize_func) {
-  g_warning ("WindowManager mutter try to max but has no func");
-    return FALSE;
-}
-
   g_warning (
               "WindowManager mutter Maximizing %s%s",
               window->desc,
@@ -2677,7 +2678,7 @@ meta_window_maximize (MetaWindow        *window,
 
       /* if the window hasn't been placed yet, we'll maximize it then
        */
-      if (!window->placed)
+      if (!window->placed && !window->force_maximize)
 	{
   g_warning ("WindowManager mutter try to max but not yet placed, doing later");
 	  window->maximize_horizontally_after_placement =
@@ -5630,6 +5631,26 @@ meta_window_recalc_features (MetaWindow *window)
         window->has_maximize_func = FALSE;
     }
 
+gboolean old_max_vert = window->has_maximize_vert_func;
+gboolean old_max_horiz = window->has_maximize_horiz_func;
+
+window->has_maximize_vert_func = FALSE;
+window->has_maximize_horiz_func = FALSE;
+
+  if (window->monitor)
+    {
+      MetaRectangle work_area, client_rect;
+
+      meta_window_get_work_area_current_monitor (window, &work_area);
+      meta_window_frame_rect_to_client_rect (window, &work_area, &client_rect);
+
+      if (window->size_hints.min_width <= client_rect.width)
+        window->has_maximize_horiz_func = TRUE;
+
+      if (window->size_hints.min_height <= client_rect.height)
+        window->has_maximize_vert_func = TRUE;
+    }
+
   g_warning (
               "WindowManager mutter  %s fullscreen = %d not resizable, maximizable = %d fullscreenable = %d min size %dx%d max size %dx%d",
               window->desc,
@@ -5686,8 +5707,22 @@ meta_window_recalc_features (MetaWindow *window)
 
   meta_window_frame_size_changed (window);
 
-  if (window->has_maximize_func != old_has_maximize_func)
-    g_signal_emit (window, window_signals[CAN_MAXIMIZE_CHANGED], 0);
+  if (window->has_maximize_vert_func != old_max_vert || window->has_maximize_horiz_func != old_max_horiz) {
+    if ((window->maximized_horizontally && !window->has_maximize_horiz_func) || (window->maximized_vertically && !window->has_maximize_vert_func)) {
+      MetaMaximizeFlags unmax = 0;
+
+      if (old_max_vert && !window->has_maximize_vert_func)
+        unmax |= META_MAXIMIZE_VERTICAL;
+
+      if (old_max_horiz && !window->has_maximize_horiz_func)
+        unmax |= META_MAXIMIZE_HORIZONTAL;
+g_warning("WindowManager mutter auto unmaximizing now");
+      meta_window_unmaximize (window, unmax);
+
+    }
+
+    g_signal_emit (window, window_signals[CAN_MAXIMIZE_CHANGED], 0, window->has_maximize_vert_func, window->has_maximize_horiz_func);
+  }
 
   /* FIXME perhaps should ensure if we don't have a shade func,
    * we aren't shaded, etc.
@@ -8472,6 +8507,18 @@ meta_window_can_maximize (MetaWindow *window)
 }
 
 gboolean
+meta_window_can_maximize_vertically (MetaWindow *window)
+{
+  return window->has_maximize_vert_func;
+}
+
+gboolean
+meta_window_can_maximize_horizontally (MetaWindow *window)
+{
+  return window->has_maximize_horiz_func;
+}
+
+gboolean
 meta_window_can_minimize (MetaWindow *window)
 {
   return window->has_minimize_func;
@@ -8729,4 +8776,15 @@ meta_window_set_can_grab (MetaWindow *window,
 
   if (!window->can_grab && window->display->grab_window == window)
     meta_display_end_grab_op (window->display, meta_display_get_current_time_roundtrip (window->display));
+}
+
+void
+meta_window_set_force_maximize (MetaWindow *window,
+                          gboolean    force_maximize)
+{
+  if (window->force_maximize == force_maximize)
+    return;
+
+  window->force_maximize = force_maximize;
+
 }

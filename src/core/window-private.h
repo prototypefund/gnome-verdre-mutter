@@ -346,6 +346,11 @@ struct _MetaWindow
   guint mwm_has_move_func : 1;
   guint mwm_has_resize_func : 1;
 
+  guint force_maximize : 1;
+
+  guint has_maximize_vert_func : 1;
+  guint has_maximize_horiz_func : 1;
+
   /* Computed features of window */
   guint decorated : 1;
   guint border_only : 1;
