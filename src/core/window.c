@@ -2692,6 +2692,9 @@ meta_window_maximize (MetaWindow        *window,
          return;
       }
 
+      if (!window->placed)
+        meta_window_force_placement (window, TRUE);
+
       if (window->tile_mode != META_TILE_NONE)
         {
           saved_rect = &window->saved_rect;
