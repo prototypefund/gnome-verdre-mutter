@@ -882,6 +882,7 @@ meta_wayland_xdg_toplevel_post_apply_state (MetaWaylandSurfaceRole  *surface_rol
 
 g_warning("WindowManager mutter: size hints change, recalc and queue resize");
           meta_window_recalc_features (window);
+if (window->maximized_horizontally || window->maximized_vertically)
     meta_window_queue (window, META_QUEUE_MOVE_RESIZE);
         }
       else
