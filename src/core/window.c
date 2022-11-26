@@ -5960,7 +5960,8 @@ update_move (MetaWindow              *window,
    * loose via X motion.
    */
 
-  if ((META_WINDOW_MAXIMIZED (window) && ABS (dy) >= shake_threshold) ||
+  if ((META_WINDOW_MAXIMIZED_VERTICALLY (window) && ABS (dy) >= shake_threshold) ||
+      (META_WINDOW_MAXIMIZED_HORIZONTALLY (window) && ABS (dx) >= shake_threshold) ||
       (META_WINDOW_TILED_SIDE_BY_SIDE (window) && (MAX (ABS (dx), ABS (dy)) >= shake_threshold)))
     {
       double prop;
