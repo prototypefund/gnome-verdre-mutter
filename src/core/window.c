@@ -2680,6 +2680,18 @@ meta_window_maximize (MetaWindow        *window,
           meta_window_unshade (window, timestamp);
         }
 
+      if (!meta_is_wayland_compositor () && !window->placed && !window->force_maximize)
+       {
+  g_warning ("WindowManager mutter try to max but not yet placed, doing later");
+         window->maximize_horizontally_after_placement =
+            window->maximize_horizontally_after_placement ||
+            maximize_horizontally;
+         window->maximize_vertically_after_placement =
+            window->maximize_vertically_after_placement ||
+            maximize_vertically;
+         return;
+      }
+
       if (window->tile_mode != META_TILE_NONE)
         {
           saved_rect = &window->saved_rect;
