@@ -518,6 +518,8 @@ meta_window_wayland_update_main_monitor (MetaWindow                   *window,
   /* If the window is not a toplevel window (i.e. it's a popup window) just use
    * the monitor of the toplevel. */
   toplevel_window = meta_wayland_surface_get_toplevel_window (wl_window->surface);
+g_return_if_fail (toplevel_window != NULL);
+
   if (toplevel_window != window)
     {
       meta_window_update_monitor (toplevel_window, flags);
