@@ -764,8 +764,6 @@ meta_window_class_init (MetaWindowClass *klass)
   /**
    * MetaWindow::can-maximize-changed:
    * @window: a #MetaWindow
-   * @can_max_vert: as
-   * @can_max_horiz: as
    *
    * Emitted when can-maximize of the window has changed.
    */
@@ -775,8 +773,7 @@ meta_window_class_init (MetaWindowClass *klass)
                   G_SIGNAL_RUN_LAST,
                   0,
                   NULL, NULL, NULL,
-                  G_TYPE_NONE, 2,
-                  G_TYPE_BOOLEAN, G_TYPE_BOOLEAN);
+                  G_TYPE_NONE, 0);
 }
 
 static void
@@ -5504,6 +5501,8 @@ meta_window_recalc_features (MetaWindow *window)
   gboolean old_has_shade_func;
   gboolean old_always_sticky;
   gboolean old_skip_taskbar;
+  gboolean old_max_vert;
+  gboolean old_max_horiz;
 
   old_has_close_func = window->has_close_func;
   old_has_minimize_func = window->has_minimize_func;
@@ -5513,6 +5512,8 @@ meta_window_recalc_features (MetaWindow *window)
   old_has_shade_func = window->has_shade_func;
   old_always_sticky = window->always_sticky;
   old_skip_taskbar = window->skip_taskbar;
+  old_max_vert = window->has_maximize_vert_func;
+  old_max_horiz = window->has_maximize_horiz_func;
 
   /* Use MWM hints initially */
   if (window->client_type == META_WINDOW_CLIENT_TYPE_X11)
@@ -5524,6 +5525,8 @@ meta_window_recalc_features (MetaWindow *window)
   window->has_minimize_func = window->mwm_has_minimize_func;
   window->has_maximize_func = window->mwm_has_maximize_func;
   window->has_move_func = window->mwm_has_move_func;
+  window->has_maximize_vert_func = window->mwm_has_maximize_func;
+  window->has_maximize_horiz_func = window->mwm_has_maximize_func;
 
   window->has_resize_func = TRUE;
 
@@ -5586,12 +5589,16 @@ meta_window_recalc_features (MetaWindow *window)
     {
       window->has_minimize_func = FALSE;
       window->has_maximize_func = FALSE;
+      window->has_maximize_vert_func = FALSE;
+      window->has_maximize_horiz_func = FALSE;
       window->has_fullscreen_func = FALSE;
     }
 
   if (!window->has_resize_func)
     {
       window->has_maximize_func = FALSE;
+      window->has_maximize_vert_func = FALSE;
+      window->has_maximize_horiz_func = FALSE;
       MetaRectangle display_rect = { 0 };
 
       meta_display_get_size (window->display, &display_rect.width,
@@ -5622,6 +5629,8 @@ meta_window_recalc_features (MetaWindow *window)
       window->has_move_func = FALSE;
       window->has_resize_func = FALSE;
       window->has_maximize_func = FALSE;
+      /* Let's not unset maximize vert/horiz func here on purpose so that window
+       * doesn't auto-unmax in fullscreen */
     }
 
   if (window->has_maximize_func && window->monitor)
@@ -5636,12 +5645,6 @@ meta_window_recalc_features (MetaWindow *window)
         window->has_maximize_func = FALSE;
     }
 
-gboolean old_max_vert = window->has_maximize_vert_func;
-gboolean old_max_horiz = window->has_maximize_horiz_func;
-
-window->has_maximize_vert_func = FALSE;
-window->has_maximize_horiz_func = FALSE;
-
   if (window->monitor)
     {
       MetaRectangle work_area, client_rect;
@@ -5649,11 +5652,15 @@ window->has_maximize_horiz_func = FALSE;
       meta_window_get_work_area_current_monitor (window, &work_area);
       meta_window_frame_rect_to_client_rect (window, &work_area, &client_rect);
 
-      if (window->size_hints.min_width <= client_rect.width)
-        window->has_maximize_horiz_func = TRUE;
+      if (window->has_maximize_vert_func &&
+          (window->size_hints.min_height > client_rect.height ||
+           window->size_hints.max_height < client_rect.height))
+        window->has_maximize_vert_func = FALSE;
 
-      if (window->size_hints.min_height <= client_rect.height)
-        window->has_maximize_vert_func = TRUE;
+      if (window->has_maximize_horiz_func &&
+          (window->size_hints.min_width > client_rect.width ||
+           window->size_hints.max_width < client_rect.width))
+        window->has_maximize_horiz_func = FALSE;
     }
 
   g_warning (
@@ -5713,7 +5720,8 @@ window->has_maximize_horiz_func = FALSE;
   meta_window_frame_size_changed (window);
 
   if (window->has_maximize_vert_func != old_max_vert || window->has_maximize_horiz_func != old_max_horiz) {
-    if ((window->maximized_horizontally && !window->has_maximize_horiz_func) || (window->maximized_vertically && !window->has_maximize_vert_func)) {
+    if ((window->maximized_horizontally && !window->has_maximize_horiz_func) ||
+        (window->maximized_vertically && !window->has_maximize_vert_func)) {
       MetaMaximizeFlags unmax = 0;
 
       if (old_max_vert && !window->has_maximize_vert_func)
@@ -5726,7 +5734,7 @@ g_warning("WindowManager mutter auto unmaximizing now");
 
     }
 
-    g_signal_emit (window, window_signals[CAN_MAXIMIZE_CHANGED], 0, window->has_maximize_vert_func, window->has_maximize_horiz_func);
+    g_signal_emit (window, window_signals[CAN_MAXIMIZE_CHANGED], 0);
   }
 
   /* FIXME perhaps should ensure if we don't have a shade func,
